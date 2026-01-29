@@ -989,6 +989,9 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
     console.log(`Verifying ${pollsToCheck.length} polls for resolution/claim status...`);
 
     for (const item of pollsToCheck) {
+      // Add throttling to avoid rate limits
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       try {
         const pId = item.pollInfo.contractPollId;
 
