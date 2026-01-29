@@ -4,7 +4,7 @@ import { sdk } from '@farcaster/miniapp-sdk';
 import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, X, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, usePublicClient, useSwitchChain, useBalance, useWatchContractEvent } from 'wagmi';
+import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, usePublicClient, useSwitchChain, useBalance, useWatchContractEvent, useReadContracts } from 'wagmi';
 import { injected } from 'wagmi/connectors';
 import { keccak256, encodePacked, formatUnits, type Hex, pad, toHex } from 'viem';
 import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI, BASE_USDC_ADDRESS } from './constants';
@@ -68,6 +68,16 @@ export default function App() {
     eventName: 'VoteCommitted',
     onLogs() {
       console.log('Vote committed! Refetching poll data...');
+      refetchPoll();
+    },
+  });
+
+  useWatchContractEvent({
+    address: ORACLE_POLL_ADDRESS,
+    abi: ORACLE_POLL_ABI,
+    eventName: 'VoteRevealed',
+    onLogs() {
+      console.log('Vote revealed! Refetching poll data...');
       refetchPoll();
     },
   });
@@ -557,6 +567,27 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
     }
   };
 
+  /* New: Fetch Tallies */
+  const { data: tallies, refetch: refetchTallies } = useReadContracts({
+    contracts: options.map((_, idx) => ({
+      address: ORACLE_POLL_ADDRESS as `0x${string}`,
+      abi: ORACLE_POLL_ABI,
+      functionName: 'optionTallies',
+      args: [BigInt(pollId), BigInt(idx)]
+    })),
+    query: {
+      enabled: options.length > 0
+    }
+  });
+
+  // Re-fetch tallies when parent updates (which happens on events)
+  useEffect(() => {
+    refetchTallies();
+  }, [pollId, refetchTallies]); // or trigger on prop change if passed
+
+  // Calculate totals
+  const totalRevealedStake = tallies?.reduce((acc, t) => acc + (t.result ? BigInt(t.result as any) : 0n), 0n) || 0n;
+
   const hasVoted = userVotes > 0;
 
   if (options.length === 0) return <div className="p-8 text-center text-gray-400">No options available</div>;
@@ -569,29 +600,64 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
       className="grid grid-cols-1 gap-4"
     >
       <div className="grid grid-cols-2 gap-3">
-        {options.map((opt, idx) => (
-          <button
-            key={opt}
-            onClick={() => enabled && !hasVoted && setSelected(idx)}
-            disabled={!enabled || hasVoted}
-            className={cn(
-              "p-6 rounded-[2rem] text-left transition-all duration-200 relative overflow-hidden group",
-              selected === idx
-                ? "bg-candy-purple text-white shadow-xl shadow-candy-purple/30 scale-[1.02]"
-                : "bg-white text-gray-600 border-2 border-transparent",
-              (!enabled || hasVoted) && "opacity-50 cursor-not-allowed",
-              !hasVoted && enabled && selected !== idx && "hover:bg-gray-50 hover:border-gray-100"
-            )}
-          >
-            <span className="font-display font-bold text-lg block mb-1">{opt}</span>
-            {selected === idx && (
-              <motion.div
-                layoutId="selection-ring"
-                className="absolute inset-0 border-[6px] border-white/20 rounded-[2rem]"
-              />
-            )}
-          </button>
-        ))}
+        {options.map((opt, idx) => {
+          const votes = tallies?.[idx]?.result ? BigInt(tallies[idx].result as any) : 0n;
+          const percentage = totalRevealedStake > 0n ? Number((votes * 10000n) / totalRevealedStake) / 100 : 0;
+          const isWinner = totalRevealedStake > 0n && percentage > 0 && votes === (tallies?.reduce((max, t) => {
+            const val = t.result ? BigInt(t.result as any) : 0n;
+            return val > max ? val : max;
+          }, 0n));
+
+          return (
+            <button
+              key={opt}
+              onClick={() => enabled && !hasVoted && setSelected(idx)}
+              disabled={!enabled || hasVoted}
+              className={cn(
+                "p-6 rounded-[2rem] text-left transition-all duration-200 relative overflow-hidden group border-2",
+                selected === idx
+                  ? "bg-candy-purple text-white shadow-xl shadow-candy-purple/30 scale-[1.02] border-transparent"
+                  : "bg-white text-gray-600 border-transparent",
+                (!enabled || hasVoted) && "opacity-80 cursor-not-allowed",
+                !hasVoted && enabled && selected !== idx && "hover:bg-gray-50 hover:border-gray-100"
+              )}
+            >
+              {/* Progress Bar Background */}
+              {!enabled && (
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${percentage}%` }}
+                  className={cn(
+                    "absolute top-0 bottom-0 left-0 opacity-10 transition-all duration-1000",
+                    isWinner ? "bg-green-500" : "bg-gray-900"
+                  )}
+                />
+              )}
+
+              <div className="relative z-10">
+                <span className="font-display font-bold text-lg block mb-1">{opt}</span>
+                {/* Results Logic: Show if voting is disabled (aka REVEAL/RESULT phase) or if user voted */}
+                {!enabled && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-xs font-black bg-gray-100 px-2 py-1 rounded-lg text-gray-500">
+                      {formatUnits(votes, 6)} USDC
+                    </span>
+                    <span className="text-xs font-bold text-gray-400">
+                      {percentage.toFixed(1)}%
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {selected === idx && (
+                <motion.div
+                  layoutId="selection-ring"
+                  className="absolute inset-0 border-[6px] border-white/20 rounded-[2rem] z-20"
+                />
+              )}
+            </button>
+          )
+        })}
       </div>
 
       <div className="bg-white rounded-[2.5rem] p-6 flex flex-col items-center justify-center gap-4 border-2 border-dashed border-gray-200 mt-2">
@@ -621,7 +687,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
           </>
         ) : (
           <p className="text-gray-400 font-bold text-center">
-            {enabled ? "Tap an option above to predict!" : "Voting is closed for this phase."}
+            {enabled ? "Tap an option above to predict!" : "Results will appear as they are revealed."}
           </p>
         )}
 
