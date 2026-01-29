@@ -993,7 +993,7 @@ function ProfileView({ address, now, onVoteAgain }: { address: string | undefine
                   </button>
                 )}
 
-                {isRevealPhase && (
+                {isRevealPhase && !item.revealed && (
                   <button
                     onClick={() => handleReveal(poll.contractPollId, item)}
                     disabled={isRevealing}
@@ -1001,6 +1001,11 @@ function ProfileView({ address, now, onVoteAgain }: { address: string | undefine
                   >
                     {isRevealing ? "REVEALING..." : "REVEAL VOTE"}
                   </button>
+                )}
+                {isRevealPhase && item.revealed && (
+                  <div className="w-full py-3 bg-gray-100 text-gray-400 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2">
+                    <CheckCircle size={14} /> REVEALED
+                  </div>
                 )}
 
                 {isWinner && (
