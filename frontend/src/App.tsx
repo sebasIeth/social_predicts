@@ -1196,7 +1196,8 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
         address: ORACLE_POLL_ADDRESS,
         abi: ORACLE_POLL_ABI,
         functionName: 'claimReward',
-        args: [BigInt(pId), BigInt(commitmentIndex)]
+        args: [BigInt(pId), BigInt(commitmentIndex)],
+        gas: 300000n
       });
       onSuccess("Reward Claimed!", "Funds sent to your wallet.");
 
