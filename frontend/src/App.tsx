@@ -869,22 +869,39 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
   const handleResolve = async (pId: number) => {
     if (!address || !publicClient) return;
     try {
-      // 1. Check on-chain status first to avoid "transaction will fail" errors
+      // 1. Check on-chain status first
       const onChainPoll = await publicClient.readContract({
         address: ORACLE_POLL_ADDRESS,
         abi: ORACLE_POLL_ABI,
-        functionName: 'polls',
+        functionName: 'polls', // [id, question, commitEnd, revealEnd, totalStake, resolved, winner]
         args: [BigInt(pId)]
       });
 
-      // polls returns struct: [id, question, commitEnd, revealEnd, totalStake, resolved, winner]
       const isResolvedOnChain = onChainPoll[5];
+      const winningOptionIndex = Number(onChainPoll[6]);
+
+      // Helper to update local state immediately
+      const updateLocalState = () => {
+        setHistory(prev => prev.map(item => {
+          if (item.pollInfo.contractPollId === pId) {
+            return {
+              ...item,
+              pollInfo: {
+                ...item.pollInfo,
+                resolved: true,
+                winningOptionIndex: winningOptionIndex
+              }
+            };
+          }
+          return item;
+        }));
+      };
 
       if (isResolvedOnChain) {
-        onSuccess("Already Resolved", "Poll is already resolved on-chain! Refreshing data...");
-        // Force sync with backend
-        await fetch(`${import.meta.env.VITE_API_URL}/api/polls/sync`, { method: 'POST' }).catch(console.error);
-        fetchHistory();
+        onSuccess("Already Resolved", "Poll is already resolved on-chain! Updating view...");
+        updateLocalState();
+        // Background sync
+        fetch(`${import.meta.env.VITE_API_URL}/api/polls/sync`, { method: 'POST' }).catch(console.error).then(() => fetchHistory());
         return;
       }
 
@@ -896,8 +913,35 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
       });
       console.log("Resolve Hash:", hash);
       await publicClient.waitForTransactionReceipt({ hash });
+
       onSuccess("Poll Resolved!", "Computing winners...");
-      fetchHistory();
+
+      // We need to re-fetch the winner from chain to know who won
+      const updatedPoll = await publicClient.readContract({
+        address: ORACLE_POLL_ADDRESS,
+        abi: ORACLE_POLL_ABI,
+        functionName: 'polls',
+        args: [BigInt(pId)]
+      });
+      const winner = Number(updatedPoll[6]);
+
+      setHistory(prev => prev.map(item => {
+        if (item.pollInfo.contractPollId === pId) {
+          return {
+            ...item,
+            pollInfo: {
+              ...item.pollInfo,
+              resolved: true,
+              winningOptionIndex: winner
+            }
+          };
+        }
+        return item;
+      }));
+
+      // Background sync
+      fetch(`${import.meta.env.VITE_API_URL}/api/polls/sync`, { method: 'POST' }).catch(console.error).then(() => fetchHistory());
+
     } catch (e: any) {
       console.error(e);
       const msg = e.details || e.shortMessage || e.message || "Unknown error";
