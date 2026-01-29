@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { OpenfortButton } from "@openfort/react";
+import { AuthContainer } from './components/auth/AuthContainer';
 import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, X, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -35,6 +36,10 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<'VOTE' | 'REVEAL' | 'LEADERBOARD' | 'PROFILE'>('VOTE');
   const [feedbackModal, setFeedbackModal] = useState<{ isOpen: boolean; type: 'success' | 'error'; title: string; message: string } | null>(null);
+
+  // Auth State
+  const [isGuest, setIsGuest] = useState(false);
+  const [isEmailAuthenticated, setIsEmailAuthenticated] = useState(false);
 
   const { address, isConnected, connector } = useAccount();
   const { connect } = useConnect();
@@ -152,6 +157,17 @@ export default function App() {
   const showError = (title: string, message: string) => {
     setFeedbackModal({ isOpen: true, type: 'error', title, message });
   };
+
+  const showApp = isConnected || isGuest || isEmailAuthenticated;
+
+  if (!showApp) {
+    return (
+      <AuthContainer
+        onSuccess={() => setIsEmailAuthenticated(true)}
+        onGuest={() => setIsGuest(true)}
+      />
+    );
+  }
 
   return (
     <div className="md:flex md:items-center md:justify-center md:min-h-screen md:bg-zinc-200">

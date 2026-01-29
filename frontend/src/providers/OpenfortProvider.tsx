@@ -13,7 +13,7 @@ export function OpenfortProviderWrapper({ children }: { children: React.ReactNod
         <OpenfortProvider
             publishableKey={key || "pk_test_placeholder_key"}
             walletConfig={{
-                shieldPublishableKey: shieldKey,
+                shieldPublishableKey: shieldKey || undefined,
                 recoverWalletAutomaticallyAfterAuth: true
             }}
         >
