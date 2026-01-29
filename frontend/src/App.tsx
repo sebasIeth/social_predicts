@@ -15,8 +15,7 @@ function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
 }
 
-// Simple toast/notification could be added here
-const STAKE_AMOUNT = 1000n; // 0.001 USDC (6 decimals)
+const STAKE_AMOUNT = 1000n;
 
 const formatTime = (seconds: number) => {
   if (seconds <= 0) return "Phase Ended";
@@ -43,7 +42,6 @@ export default function App() {
 
   const isMiniApp = connector?.id === 'farcaster';
 
-  // 1. Get Poll ID
   const { data: nextPollId } = useReadContract({
     address: ORACLE_POLL_ADDRESS,
     abi: ORACLE_POLL_ABI,
@@ -52,7 +50,6 @@ export default function App() {
 
   const currentPollId = nextPollId ? Number(nextPollId) - 1 : 0;
 
-  // 2. Get Poll Data
   const { data: pollData, refetch: refetchPoll } = useReadContract({
     address: ORACLE_POLL_ADDRESS,
     abi: ORACLE_POLL_ABI,
@@ -83,7 +80,6 @@ export default function App() {
     }
   });
 
-  // Ticker for countdowns
   const [now, setNow] = useState(Math.floor(Date.now() / 1000));
   useEffect(() => {
     const timer = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
@@ -100,7 +96,6 @@ export default function App() {
     else phase = 'RESULT';
   }
 
-  // Sync poll with backend
   const lastSyncedId = useRef<number | null>(null);
   useEffect(() => {
     if (pollData && pollData[1] && options && lastSyncedId.current !== currentPollId) {
@@ -117,7 +112,7 @@ export default function App() {
         })
       }).catch(err => {
         console.error("Sync Error:", err);
-        lastSyncedId.current = null; // Allow retry on error
+        lastSyncedId.current = null;
       });
     }
   }, [currentPollId, pollData, options]);
@@ -129,8 +124,8 @@ export default function App() {
       if (!address) return;
       const title = "Will Bitcoin hit $100k in 2026? 🚀";
       const options = ["Yes", "No", "Maybe"];
-      const commitDuration = 600; // 10 mins
-      const revealDuration = 600; // 10 mins
+      const commitDuration = 600;
+      const revealDuration = 600;
 
       await writeContractAsync({
         address: ORACLE_POLL_ADDRESS,
@@ -163,7 +158,6 @@ export default function App() {
       <div className="w-full h-full md:w-[414px] md:h-[860px] md:rounded-[3rem] md:border-[10px] md:border-zinc-900 md:shadow-2xl md:overflow-hidden bg-paper relative">
         <div className="h-full overflow-y-auto scrollbar-hide">
           <div className="min-h-full pb-40 font-sans text-orange-950 selection:bg-candy-yellow/30">
-            {/* Playful Header */}
             <header className="px-6 pt-12 pb-6 flex justify-between items-center bg-white/50 backdrop-blur-sm sticky top-0 z-50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-candy-purple rounded-2xl rotate-3 flex items-center justify-center shadow-lg">
@@ -181,7 +175,6 @@ export default function App() {
                 <OpenfortButton />
               </div>
 
-              {/* Debug: Create Poll Button (Dev Only) */}
               {import.meta.env.DEV && (
                 <div className="flex gap-2 ml-2">
                   {isConnected && (
@@ -196,10 +189,8 @@ export default function App() {
               )}
             </header>
 
-            {/* Main Grid Layout */}
             <main className="px-4 space-y-4">
 
-              {/* Hero Card: The Question */}
               <motion.div
                 layout
                 className="bg-white rounded-[2.5rem] p-8 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] border-b-8 border-gray-100 relative overflow-hidden"
@@ -225,8 +216,6 @@ export default function App() {
                   {pollData ? pollData[1] : "Loading Poll..."}
                 </h2>
 
-                {/* Stake Info */}
-                {/* Stake Info */}
                 <div className="flex flex-col items-start gap-3 mb-8">
                   <div className="px-3 py-1 bg-gray-50 rounded-lg text-xs font-bold text-gray-500">
                     Total Stake: {pollData ? formatUnits(pollData[4], 6) : '0'} USDC
@@ -253,7 +242,6 @@ export default function App() {
                 </div>
               </motion.div>
 
-              {/* Action Area */}
               <AnimatePresence mode="wait">
                 {activeTab === 'VOTE' && (
                   <VotingGrid
@@ -294,7 +282,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Floating Bottom Nav */}
         <nav className="absolute bottom-6 left-6 right-6 p-2 bg-white/90 backdrop-blur-md rounded-[2rem] shadow-[0_20px_40px_-5px_rgba(0,0,0,0.1)] border border-white/50 flex justify-between items-center z-50">
           <NavButton
             active={activeTab === 'VOTE'}
@@ -326,7 +313,6 @@ export default function App() {
           />
         </nav>
 
-        {/* Feedback Modal */}
         <AnimatePresence>
           {feedbackModal && feedbackModal.isOpen && (
             <FeedbackModal
@@ -397,7 +383,6 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
   const { data: ethBalance } = useBalance({ address });
   const [userVotes, setUserVotes] = useState(0);
 
-  // ... (existing fetchUserVotes)
 
   const fetchUserVotes = async () => {
     if (!address) return;
@@ -413,10 +398,8 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
     fetchUserVotes();
   }, [address, pollId]);
 
-  // Contract Writes
   const { sendTransactionAsync } = useSendTransaction();
 
-  // Check Allowance
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: BASE_USDC_ADDRESS,
     abi: erc20Abi,
@@ -443,7 +426,6 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
   const { switchChainAsync } = useSwitchChain();
 
   const handleApprove = async () => {
-    // ... (existing approve logic)
     if (!address || !publicClient) return;
 
     try {
@@ -528,14 +510,12 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
       });
 
       console.log("Tx Sent successfully:", hash);
-      await publicClient.waitForTransactionReceipt({ hash }); // Wait for confirmation before success
+      await publicClient.waitForTransactionReceipt({ hash });
 
-      // 0. Get next commitment index from backend
       const resCount = await fetch(`http://127.0.0.1:5001/api/votes/user/${address}`);
       const userHistory = await resCount.json();
       const commitmentIndex = userHistory.filter((v: any) => v.pollId === Number(pollId)).length;
 
-      // Store in array-based localStorage
       const storageKey = `oracle_poll_votes_${pollId}_${address}`;
       const existingVotes = JSON.parse(localStorage.getItem(storageKey) || '[]');
       existingVotes.push({ salt, vote: selected, commitmentIndex });
@@ -659,25 +639,21 @@ function RevealZone({ pollId, options, onSuccess, onError }: { pollId: number, o
     const syncVotes = async () => {
       if (!address) return;
 
-      // 1. Check local storage first (immediate)
       const storageKey = `oracle_poll_votes_${pollId}_${address}`;
       let saved = JSON.parse(localStorage.getItem(storageKey) || '[]');
 
-      // 2. Always try to sync with DB to be sure
       try {
         const res = await fetch(`http://127.0.0.1:5001/api/votes/user/${address}`);
         const dbVotes = await res.json();
         const relevant = dbVotes.filter((v: any) => v.pollId === pollId);
 
         if (relevant.length > 0) {
-          // Merge or prioritize DB data for security/cross-device
           const formatted = relevant.map((rv: any) => ({
             vote: rv.optionIndex,
             salt: rv.salt,
             commitmentIndex: rv.commitmentIndex
           }));
           setLocalVotes(formatted);
-          // Update local for next time
           localStorage.setItem(storageKey, JSON.stringify(formatted));
         } else {
           setLocalVotes(saved);

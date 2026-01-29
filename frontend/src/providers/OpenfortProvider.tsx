@@ -16,7 +16,6 @@ export function OpenfortProviderWrapper({ children }: { children: React.ReactNod
                 shieldPublishableKey: shieldKey,
                 recoverWalletAutomaticallyAfterAuth: true
             }}
-        // debugMode removed for production
         >
             {children}
         </OpenfortProvider>

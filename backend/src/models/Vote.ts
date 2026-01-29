@@ -18,7 +18,5 @@ const VoteSchema: Schema = new Schema({
     timestamp: { type: Date, default: Date.now },
 });
 
-// Multiple votes per address allowed
-// Removed unique index
 
 export default mongoose.model<IVote>('Vote', VoteSchema);

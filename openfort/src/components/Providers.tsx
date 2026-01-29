@@ -1,4 +1,3 @@
-// src/components/Providers.tsx
 import React from "react";
 import {
   AuthProvider,
@@ -12,7 +11,7 @@ import { baseSepolia, sepolia } from "viem/chains";
 const config = createConfig(
   getDefaultConfig({
     appName: "Openfort Demo App",
-    chains: [baseSepolia, sepolia], // add all the chains you want to support
+    chains: [baseSepolia, sepolia],
     ssr: true,
   })
 );
@@ -24,7 +23,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <OpenfortProvider
-          // Set the publishable key of your Openfort account. This field is required.
           publishableKey={"YOUR_OPENFORT_PUBLISHABLE_KEY"}
 
 
