@@ -1,0 +1,33 @@
+{
+    "accountAssociation": {
+        "header": "",
+        "payload": "",
+        "signature": ""
+    },
+    "miniapp": {
+        "version": "1",
+        "name": "Social Market",
+        "homeUrl": "https://social-market.vercel.app",
+        "iconUrl": "https://social-market.vercel.app/logo.png",
+        "splashImageUrl": "https://social-market.vercel.app/splash.png",
+        "splashBackgroundColor": "#000000",
+        "webhookUrl": "https://social-market-api.vercel.app/api/webhook",
+        "subtitle": "Predict and Win",
+        "description": "A social market for prediction events.",
+        "screenshotUrls": [
+            "https://social-market.vercel.app/screenshot.png"
+        ],
+        "primaryCategory": "social",
+        "tags": [
+            "prediction",
+            "market",
+            "social"
+        ],
+        "heroImageUrl": "https://social-market.vercel.app/hero.png",
+        "tagline": "Predict the future",
+        "ogTitle": "Social Market",
+        "ogDescription": "Predict the future with Social Market",
+        "ogImageUrl": "https://social-market.vercel.app/og.png",
+        "noindex": true
+    }
+}
