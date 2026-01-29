@@ -1065,12 +1065,14 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
       // Check if stuck (ended but not resolved) OR won (need to check claim status)
       const stuck = (now >= poll.revealEndTime && !poll.resolved);
       const won = (poll.resolved && poll.winningOptionIndex === item.optionIndex);
-      return stuck || won;
+      // Also check if in reveal phase but not marked as revealed
+      const revealPhase = (now >= poll.commitEndTime && now < poll.revealEndTime && !item.revealed);
+      return stuck || won || revealPhase;
     });
 
     if (pollsToCheck.length === 0) return;
 
-    console.log(`Verifying ${pollsToCheck.length} polls for resolution/claim status...`);
+    console.log(`Verifying ${pollsToCheck.length} polls for resolution/claim/reveal status...`);
 
     for (const item of pollsToCheck) {
       // Add throttling to avoid rate limits
@@ -1105,21 +1107,45 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
           }
         }
 
-        if (isResolved || isClaimed !== item.claimed) {
-          console.log(`Updating poll ${pId}: Resolved=${isResolved}, Claimed=${isClaimed}`);
+        // 3. Check Reveal Status (if in reveal phase and not revealed)
+        let isRevealed = item.revealed;
+        if (!isRevealed && now >= item.pollInfo.commitEndTime) {
+          try {
+            const recordedOption = await publicClient.readContract({
+              address: ORACLE_POLL_ADDRESS,
+              abi: ORACLE_POLL_ABI,
+              functionName: 'votes',
+              args: [BigInt(pId), address as `0x${string}`, BigInt(item.commitmentIndex)]
+            });
+
+            // If it returns the option we voted for (and not 0 if ambiguous), it's revealed.
+            // Or if it returns ANY non-zero value, it's definitely revealed.
+            // If we voted 0 and it returns 0, we can't be sure from 'votes' mapping alone easily 
+            // without simulating, but for common cases:
+            if (Number(recordedOption) === item.optionIndex) {
+              isRevealed = true;
+            }
+          } catch (e) {
+            console.warn("Failed to check reveal status", e);
+          }
+        }
+
+        if (isResolved || isClaimed !== item.claimed || isRevealed !== item.revealed) {
+          console.log(`Updating poll ${pId}: Resolved=${isResolved}, Claimed=${isClaimed}, Revealed=${isRevealed}`);
 
           setHistory(prev => prev.map(pi => {
             if (pi.pollInfo.contractPollId === pId) {
               const updated = { ...pi };
               updated.pollInfo = { ...pi.pollInfo, resolved: true, winningOptionIndex: winner };
               if (isClaimed) updated.claimed = true;
+              if (isRevealed) updated.revealed = true;
               return updated;
             }
             return pi;
           }));
 
           // Trigger backend sync silently if meaningful change
-          if (isResolved) {
+          if (isResolved || isRevealed) {
             fetch(`${import.meta.env.VITE_API_URL}/api/polls/sync`, { method: 'POST' }).catch(() => { });
           }
         }
