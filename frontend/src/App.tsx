@@ -175,25 +175,7 @@ export default function App() {
                 </div>
               </div>
 
-              {!isConnected ? (
-                <button
-                  onClick={() => connect({ connector: injected() })}
-                  className="px-4 py-2 bg-black text-white rounded-2xl text-xs font-bold hover:scale-95 transition-transform flex items-center gap-2"
-                >
-                  <Wallet size={14} /> Connect
-                </button>
-              ) : (
-                <button
-                  onClick={() => !isMiniApp && disconnect()}
-                  disabled={isMiniApp}
-                  className={cn(
-                    "px-4 py-2 bg-white border-2 border-gray-100 rounded-2xl text-xs font-bold text-gray-500 transition-colors",
-                    !isMiniApp ? "hover:bg-gray-50 cursor-pointer" : "cursor-default"
-                  )}
-                >
-                  {address?.slice(0, 6)}...{address?.slice(-4)}
-                </button>
-              )}
+
 
               <div className="ml-2 scale-90">
                 <OpenfortButton />
