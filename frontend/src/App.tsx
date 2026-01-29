@@ -6,7 +6,7 @@ import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, usePublicClient, useSwitchChain, useBalance, useWatchContractEvent } from 'wagmi';
 import { injected } from 'wagmi/connectors';
-import { keccak256, encodePacked, stringToHex, formatUnits, type Hex, pad, toHex } from 'viem';
+import { keccak256, encodePacked, formatUnits, type Hex, pad, toHex } from 'viem';
 import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI, BASE_USDC_ADDRESS } from './constants';
 import { erc20Abi } from 'viem';
 
@@ -104,7 +104,7 @@ export default function App() {
   useEffect(() => {
     if (pollData && pollData[1] && options && lastSyncedId.current !== currentPollId) {
       lastSyncedId.current = currentPollId;
-      fetch('http://127.0.0.1:5001/api/polls', {
+      fetch(`${import.meta.env.VITE_API_URL}/api/polls`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -411,7 +411,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
   const fetchUserVotes = async () => {
     if (!address) return;
     try {
-      const res = await fetch(`http://127.0.0.1:5001/api/votes/user/${address}`);
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/votes/user/${address}`);
       const data = await res.json();
       const count = data.filter((v: any) => v.pollId === pollId).length;
       setUserVotes(count); // Only updates on fetch
@@ -521,7 +521,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
       await publicClient.waitForTransactionReceipt({ hash }); // Wait for confirmation before success
 
       // 0. Get next commitment index from backend
-      const resCount = await fetch(`http://127.0.0.1:5001/api/votes/user/${address}`);
+      const resCount = await fetch(`${import.meta.env.VITE_API_URL}/api/votes/user/${address}`);
       const userHistory = await resCount.json();
       const commitmentIndex = userHistory.filter((v: any) => v.pollId === Number(pollId)).length;
 
@@ -531,7 +531,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
       existingVotes.push({ salt, vote: selected, commitmentIndex });
       localStorage.setItem(storageKey, JSON.stringify(existingVotes));
 
-      await fetch('http://127.0.0.1:5001/api/votes', {
+      await fetch(`${import.meta.env.VITE_API_URL}/api/votes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -655,7 +655,7 @@ function RevealZone({ pollId, options, onSuccess, onError }: { pollId: number, o
 
       // 2. Always try to sync with DB to be sure
       try {
-        const res = await fetch(`http://127.0.0.1:5001/api/votes/user/${address}`);
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/votes/user/${address}`);
         const dbVotes = await res.json();
         const relevant = dbVotes.filter((v: any) => v.pollId === pollId);
 
@@ -694,7 +694,7 @@ function RevealZone({ pollId, options, onSuccess, onError }: { pollId: number, o
           BigInt(pollId),
           BigInt(v.commitmentIndex),
           BigInt(v.vote),
-          stringToHex(v.salt, { size: 32 }) as Hex
+          v.salt as Hex
         ]
       });
       setRevealingIndex(null);
@@ -773,7 +773,7 @@ function ProfileView({ address, now, onVoteAgain }: { address: string | undefine
   const fetchHistory = async () => {
     if (!address) return;
     try {
-      const res = await fetch(`http://127.0.0.1:5001/api/votes/user/${address}`);
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/votes/user/${address}`);
       const data = await res.json();
       setHistory(data);
     } catch (err) {
@@ -803,7 +803,7 @@ function ProfileView({ address, now, onVoteAgain }: { address: string | undefine
           BigInt(pId),
           BigInt(backendVote.commitmentIndex),
           BigInt(backendVote.optionIndex),
-          stringToHex(salt, { size: 32 }) as Hex
+          salt as Hex
         ]
       });
 
