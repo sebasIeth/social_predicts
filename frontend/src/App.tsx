@@ -303,6 +303,8 @@ export default function App() {
                     key="profile"
                     address={address}
                     now={now}
+                    onSuccess={showSuccess}
+                    onError={showError}
                   />
                 )}
               </AnimatePresence>
@@ -863,7 +865,7 @@ function LeaderboardView() {
   )
 }
 
-function ProfileView({ address, now }: { address: string | undefined, now: number }) {
+function ProfileView({ address, now, onSuccess, onError }: { address: string | undefined, now: number, onSuccess: (t: string, m: string) => void, onError: (t: string, m: string) => void }) {
   const handleResolve = async (pId: number) => {
     if (!address || !publicClient) return;
     try {
@@ -879,7 +881,7 @@ function ProfileView({ address, now }: { address: string | undefined, now: numbe
       const isResolvedOnChain = onChainPoll[5];
 
       if (isResolvedOnChain) {
-        alert("Poll is already resolved on-chain! Refreshing data...");
+        onSuccess("Already Resolved", "Poll is already resolved on-chain! Refreshing data...");
         // Force sync with backend
         await fetch(`${import.meta.env.VITE_API_URL}/api/polls/sync`, { method: 'POST' }).catch(console.error);
         fetchHistory();
@@ -894,15 +896,15 @@ function ProfileView({ address, now }: { address: string | undefined, now: numbe
       });
       console.log("Resolve Hash:", hash);
       await publicClient.waitForTransactionReceipt({ hash });
-      alert("Poll Resolved! Computing winners...");
+      onSuccess("Poll Resolved!", "Computing winners...");
       fetchHistory();
     } catch (e: any) {
       console.error(e);
       const msg = e.details || e.shortMessage || e.message || "Unknown error";
       if (msg.includes("Resolution time not reached")) {
-        alert("Cannot resolve yet: Reveal phase not fully ended on-chain.");
+        onError("Cannot Resolve", "Reveal phase not fully ended on-chain.");
       } else {
-        alert("Resolve Failed: " + msg);
+        onError("Resolve Failed", msg);
       }
     }
   };
@@ -930,7 +932,7 @@ function ProfileView({ address, now }: { address: string | undefined, now: numbe
     if (!address) return;
     const salt = backendVote.salt;
     if (!salt) {
-      alert("No salt found on server for this vote.");
+      onError("No Salt Found", "No salt found on server for this vote.");
       return;
     }
 
@@ -950,11 +952,12 @@ function ProfileView({ address, now }: { address: string | undefined, now: numbe
         ]
       });
 
-      alert("Vote Revealed Successfully!");
+      onSuccess("Vote Revealed!", "Vote Revealed on-chain!");
       fetchHistory();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Reveal Failed");
+      const msg = e.details || e.shortMessage || e.message || "An unexpected error occurred.";
+      onError("Reveal Failed", msg);
     } finally {
       const revealKey = `${pId}-${backendVote.commitmentIndex}`;
       setRevealingIndices(prev => {
@@ -974,11 +977,12 @@ function ProfileView({ address, now }: { address: string | undefined, now: numbe
         functionName: 'claimReward',
         args: [BigInt(pId), BigInt(commitmentIndex)]
       });
-      alert("Reward Claimed!");
+      onSuccess("Reward Claimed!", "Funds sent to your wallet.");
       fetchHistory();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Claim Failed");
+      const msg = e.details || e.shortMessage || e.message || "An unexpected error occurred.";
+      onError("Claim Failed", msg);
     }
   };
 
