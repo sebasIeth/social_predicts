@@ -1111,29 +1111,20 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
         let isRevealed = item.revealed;
         if (!isRevealed && now >= item.pollInfo.commitEndTime && now < item.pollInfo.revealEndTime) {
           try {
-            // We use simulation to check if we CAN reveal.
-            // If effective simulation succeeds, it means we haven't revealed yet.
-            // If it fails, it likely means we have already revealed.
-            await publicClient.simulateContract({
+            // Use the optimized View function from the contract
+            const hasRevealedOnChain = await publicClient.readContract({
               address: ORACLE_POLL_ADDRESS,
               abi: ORACLE_POLL_ABI,
-              functionName: 'revealVote',
-              args: [
-                BigInt(pId),
-                BigInt(item.commitmentIndex),
-                BigInt(item.optionIndex),
-                item.salt as Hex
-              ],
-              account: address as `0x${string}`
+              functionName: 'hasRevealed',
+              args: [BigInt(pId), address as `0x${string}`, BigInt(item.commitmentIndex)]
             });
-            // If we get here, simulation succeeded => NOT revealed yet.
-            // So isRevealed remains false (or item.revealed).
+
+            if (hasRevealedOnChain) {
+              console.log(`Verified reveal via hasRevealed():`, item.commitmentIndex);
+              isRevealed = true;
+            }
           } catch (e) {
-            // Simulation failed.
-            // Assuming valid params (salt, etc from backend), this means "Already Revealed"
-            // or some other blocker. We'll assume revealed to hide the button.
-            console.log(`Simulation failed for poll ${pId} (likely revealed):`, e);
-            isRevealed = true;
+            console.warn("Failed to check hasRevealed status", e);
           }
         }
 

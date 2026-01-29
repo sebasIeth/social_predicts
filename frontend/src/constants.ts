@@ -1,4 +1,4 @@
-export const ORACLE_POLL_ADDRESS = "0x3651dA7d501fD54e58c0aF64E221c4Fe22957eC5";
+export const ORACLE_POLL_ADDRESS = "0xe30FCAEA76dE0FA8235066e1f697d6673F598b20";
 export const BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
 export const ORACLE_POLL_ABI = [
@@ -341,9 +341,14 @@ export const ORACLE_POLL_ABI = [
                 "internalType": "uint256",
                 "name": "_pollId",
                 "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_commitmentIndex",
+                "type": "uint256"
             }
         ],
-        "name": "resolvePoll",
+        "name": "claimReward",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -446,6 +451,34 @@ export const ORACLE_POLL_ABI = [
         ],
         "stateMutability": "view",
         "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_pollId",
+                "type": "uint256"
+            },
+            {
+                "internalType": "address",
+                "name": "_voter",
+                "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_commitmentIndex",
+                "type": "uint256"
+            }
+        ],
+        "name": "hasRevealed",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
     }
 ] as const;
-

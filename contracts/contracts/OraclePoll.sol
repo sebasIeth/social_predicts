@@ -131,4 +131,8 @@ contract OraclePoll {
     function getPollOptions(uint256 _pollId) external view returns (string[] memory) {
          return polls[_pollId].options;
     }
+
+    function hasRevealed(uint256 _pollId, address _voter, uint256 _commitmentIndex) external view returns (bool) {
+        return votes[_pollId][_voter][_commitmentIndex] != 0;
+    }
 }

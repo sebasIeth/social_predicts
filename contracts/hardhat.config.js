@@ -21,7 +21,7 @@ module.exports = {
             chainId: 84532,
         },
         base: {
-            url: 'https://mainnet.base.org',
+            url: 'https://base-mainnet.g.alchemy.com/v2/TRylDDMm2LeRFKSeETLtD',
             accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
             chainId: 8453,
         },
