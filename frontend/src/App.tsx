@@ -681,12 +681,15 @@ function RevealZone({ pollId, options, onSuccess, onError }: { pollId: number, o
     syncVotes();
   }, [address, pollId]);
 
+  /* New Hook for publicClient */
+  const publicClient = usePublicClient();
+
   const handleReveal = async (v: any, index: number) => {
-    if (!address) return;
+    if (!address || !publicClient) return;
 
     try {
       setRevealingIndex(index);
-      await writeReveal({
+      const hash = await writeReveal({
         address: ORACLE_POLL_ADDRESS,
         abi: ORACLE_POLL_ABI,
         functionName: 'revealVote',
@@ -697,8 +700,21 @@ function RevealZone({ pollId, options, onSuccess, onError }: { pollId: number, o
           v.salt as Hex
         ]
       });
+
+      console.log("Reveal Hash:", hash);
+      await publicClient.waitForTransactionReceipt({ hash });
+
       setRevealingIndex(null);
       onSuccess("Vote Revealed!", "Your vote has been recorded on-chain.");
+
+      // Remove from UI and LocalStorage
+      setLocalVotes((prev) => {
+        const next = prev.filter((_, i) => i !== index);
+        const storageKey = `oracle_poll_votes_${pollId}_${address}`;
+        localStorage.setItem(storageKey, JSON.stringify(next));
+        return next;
+      });
+
     } catch (e: any) {
       console.error(e);
       setRevealingIndex(null);
