@@ -4,7 +4,7 @@ import { sdk } from '@farcaster/miniapp-sdk';
 import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, X, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, usePublicClient, useSwitchChain, useBalance, useSendTransaction } from 'wagmi';
+import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, usePublicClient, useSwitchChain, useBalance, useSendTransaction, useWatchContractEvent } from 'wagmi';
 import { injected } from 'wagmi/connectors';
 import { keccak256, encodePacked, stringToHex, formatUnits, type Hex, encodeFunctionData, pad, toHex } from 'viem';
 import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI, BASE_USDC_ADDRESS } from './constants';
@@ -52,7 +52,7 @@ export default function App() {
   const currentPollId = nextPollId ? Number(nextPollId) - 1 : 0;
 
   // 2. Get Poll Data
-  const { data: pollData } = useReadContract({
+  const { data: pollData, refetch: refetchPoll } = useReadContract({
     address: ORACLE_POLL_ADDRESS,
     abi: ORACLE_POLL_ABI,
     functionName: 'polls',
@@ -60,6 +60,16 @@ export default function App() {
     query: {
       enabled: nextPollId !== undefined,
     }
+  });
+
+  useWatchContractEvent({
+    address: ORACLE_POLL_ADDRESS,
+    abi: ORACLE_POLL_ABI,
+    eventName: 'VoteCommitted',
+    onLogs() {
+      console.log('Vote committed! Refetching poll data...');
+      refetchPoll();
+    },
   });
 
   const { data: options } = useReadContract({
@@ -262,6 +272,9 @@ export default function App() {
                     enabled={phase === 'COMMIT'}
                     onSuccess={showSuccess}
                     onError={showError}
+                    onVoteSuccess={() => {
+                      refetchPoll();
+                    }}
                   />
                 )}
                 {activeTab === 'REVEAL' && (
@@ -383,7 +396,7 @@ function FeedbackModal({ type, title, message, onClose }: { type: 'success' | 'e
   )
 }
 
-function VotingGrid({ pollId, options, enabled, onSuccess, onError }: { pollId: number, options: readonly string[], enabled: boolean, onSuccess: (t: string, m: string) => void, onError: (t: string, m: string) => void }) {
+function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSuccess }: { pollId: number, options: readonly string[], enabled: boolean, onSuccess: (t: string, m: string) => void, onError: (t: string, m: string) => void, onVoteSuccess?: () => void }) {
   const [selected, setSelected] = useState<number | null>(null);
   const { address } = useAccount();
   useSwitchChain();
@@ -393,13 +406,15 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError }: { pollId: 
   const { data: ethBalance } = useBalance({ address });
   const [userVotes, setUserVotes] = useState(0);
 
+  // ... (existing fetchUserVotes)
+
   const fetchUserVotes = async () => {
     if (!address) return;
     try {
       const res = await fetch(`http://127.0.0.1:5001/api/votes/user/${address}`);
       const data = await res.json();
       const count = data.filter((v: any) => v.pollId === pollId).length;
-      setUserVotes(count);
+      setUserVotes(count); // Only updates on fetch
     } catch (e) { console.error(e) }
   };
 
@@ -437,6 +452,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError }: { pollId: 
   const { switchChainAsync } = useSwitchChain();
 
   const handleApprove = async () => {
+    // ... (existing approve logic)
     if (!address || !publicClient) return;
 
     try {
@@ -521,6 +537,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError }: { pollId: 
       });
 
       console.log("Tx Sent successfully:", hash);
+      await publicClient.waitForTransactionReceipt({ hash }); // Wait for confirmation before success
 
       // 0. Get next commitment index from backend
       const resCount = await fetch(`http://127.0.0.1:5001/api/votes/user/${address}`);
@@ -550,6 +567,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError }: { pollId: 
       refetchBalance();
       refetchAllowance();
       fetchUserVotes();
+      if (onVoteSuccess) onVoteSuccess();
     } catch (e: any) {
       console.error("Commit Failed Full Error:", e);
       setIsCommitting(false);
@@ -557,6 +575,8 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError }: { pollId: 
       onError("Transaction Failed", msg);
     }
   };
+
+  const hasVoted = userVotes > 0;
 
   if (options.length === 0) return <div className="p-8 text-center text-gray-400">No options available</div>;
 
@@ -571,14 +591,15 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError }: { pollId: 
         {options.map((opt, idx) => (
           <button
             key={opt}
-            onClick={() => enabled && setSelected(idx)}
-            disabled={!enabled}
+            onClick={() => enabled && !hasVoted && setSelected(idx)}
+            disabled={!enabled || hasVoted}
             className={cn(
               "p-6 rounded-[2rem] text-left transition-all duration-200 relative overflow-hidden group",
               selected === idx
                 ? "bg-candy-purple text-white shadow-xl shadow-candy-purple/30 scale-[1.02]"
-                : "bg-white text-gray-600 hover:bg-gray-50 border-2 border-transparent hover:border-gray-100",
-              !enabled && "opacity-50 cursor-not-allowed"
+                : "bg-white text-gray-600 border-2 border-transparent",
+              (!enabled || hasVoted) && "opacity-50 cursor-not-allowed",
+              !hasVoted && enabled && selected !== idx && "hover:bg-gray-50 hover:border-gray-100"
             )}
           >
             <span className="font-display font-bold text-lg block mb-1">{opt}</span>
@@ -593,7 +614,11 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError }: { pollId: 
       </div>
 
       <div className="bg-white rounded-[2.5rem] p-6 flex flex-col items-center justify-center gap-4 border-2 border-dashed border-gray-200 mt-2">
-        {selected !== null ? (
+        {hasVoted ? (
+          <div className="w-full py-5 rounded-3xl bg-gray-100 text-gray-400 font-bold text-xl text-center cursor-not-allowed">
+            ALREADY VOTED
+          </div>
+        ) : selected !== null ? (
           <>
             {needsApproval ? (
               <button
@@ -619,7 +644,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError }: { pollId: 
           </p>
         )}
 
-        {userVotes > 0 && (
+        {hasVoted && (
           <div className="flex items-center gap-2 px-4 py-2 bg-candy-mint/10 rounded-full border border-candy-mint/20">
             <CheckCircle size={14} className="text-candy-mint" />
             <span className="text-xs font-black text-candy-mint uppercase">
