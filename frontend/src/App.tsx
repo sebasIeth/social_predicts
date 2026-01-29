@@ -423,7 +423,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
   }, [address, pollId]);
 
   // Contract Writes
-  const { sendTransactionAsync } = useSendTransaction();
+  const { writeContractAsync } = useWriteContract();
 
   // Check Allowance
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
@@ -452,7 +452,6 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
   const { switchChainAsync } = useSwitchChain();
 
   const handleApprove = async () => {
-    // ... (existing approve logic)
     if (!address || !publicClient) return;
 
     try {
@@ -467,16 +466,11 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
       setIsApproving(true);
       console.log("Initiating Approval...");
 
-      const encoded = encodeFunctionData({
+      const hash = await writeContractAsync({
+        address: BASE_USDC_ADDRESS,
         abi: erc20Abi,
         functionName: 'approve',
-        args: [ORACLE_POLL_ADDRESS as `0x${string}`, STAKE_AMOUNT]
-      });
-
-      const hash = await sendTransactionAsync({
-        to: BASE_USDC_ADDRESS as `0x${string}`,
-        data: encoded,
-        gas: 100000n,
+        args: [ORACLE_POLL_ADDRESS, STAKE_AMOUNT],
       });
 
       console.log("Approval Hash Sent:", hash);
@@ -516,24 +510,11 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
 
       console.log("Sending commitVote to Poll:", pollId, "Hash:", voteHash);
 
-      const encoded = encodeFunctionData({
+      const hash = await writeContractAsync({
+        address: ORACLE_POLL_ADDRESS,
         abi: ORACLE_POLL_ABI,
         functionName: 'commitVote',
-        args: [BigInt(pollId), voteHash as `0x${string}`]
-      });
-
-      console.log("Fetching current fees from Base...");
-      const estimate = await publicClient.estimateFeesPerGas();
-      console.log("Base Fees:", estimate);
-
-      const hash = await sendTransactionAsync({
-        to: ORACLE_POLL_ADDRESS as `0x${string}`,
-        data: encoded,
-        gas: 300000n,
-        maxFeePerGas: estimate.maxFeePerGas,
-        maxPriorityFeePerGas: estimate.maxPriorityFeePerGas,
-        type: 'eip1559',
-        value: 0n,
+        args: [BigInt(pollId), voteHash as `0x${string}`],
       });
 
       console.log("Tx Sent successfully:", hash);
