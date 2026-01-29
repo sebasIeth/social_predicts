@@ -111,6 +111,34 @@ export default function App() {
     }
   }, [currentPollId, pollData, options]);
 
+  const { writeContractAsync } = useWriteContract();
+
+  const handleCreatePoll = async () => {
+    try {
+      if (!address) return;
+      const title = "Will Bitcoin hit $100k in 2026? 🚀";
+      const options = ["Yes", "No", "Maybe"];
+      const commitDuration = 600; // 10 mins
+      const revealDuration = 600; // 10 mins
+
+      await writeContractAsync({
+        address: ORACLE_POLL_ADDRESS,
+        abi: ORACLE_POLL_ABI,
+        functionName: 'createPoll',
+        args: [
+          title,
+          options,
+          BigInt(commitDuration),
+          BigInt(revealDuration)
+        ]
+      });
+      alert("Poll Created! Refresh in a few seconds.");
+    } catch (e) {
+      console.error(e);
+      alert("Failed to create poll");
+    }
+  };
+
   const showSuccess = (title: string, message: string) => {
     setFeedbackModal({ isOpen: true, type: 'success', title, message });
   };
@@ -153,6 +181,16 @@ export default function App() {
                   )}
                 >
                   {address?.slice(0, 6)}...{address?.slice(-4)}
+                </button>
+              )}
+
+              {/* Debug: Create Poll Button (Dev Only) */}
+              {import.meta.env.DEV && isConnected && (
+                <button
+                  onClick={handleCreatePoll}
+                  className="px-3 py-2 bg-red-500 text-white rounded-xl text-xs font-bold hover:bg-red-600 ml-2"
+                >
+                  + Poll
                 </button>
               )}
             </header>
@@ -296,7 +334,7 @@ export default function App() {
           )}
         </AnimatePresence>
       </div>
-    </div>
+    </div >
   );
 }
 
