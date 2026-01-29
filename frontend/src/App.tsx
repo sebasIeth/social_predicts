@@ -965,10 +965,59 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/votes/user/${address}`);
       const data = await res.json();
       setHistory(data);
+      verifyStuckPolls(data);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const verifyStuckPolls = async (items: any[]) => {
+    if (!publicClient) return;
+
+    const stuckItems = items.filter(item => {
+      const poll = item.pollInfo;
+      const hasEnded = now >= poll.revealEndTime;
+      return hasEnded && !poll.resolved;
+    });
+
+    if (stuckItems.length === 0) return;
+
+    console.log(`Verifying ${stuckItems.length} potentially stuck polls...`);
+
+    for (const item of stuckItems) {
+      try {
+        const pId = item.pollInfo.contractPollId;
+        const onChainPoll = await publicClient.readContract({
+          address: ORACLE_POLL_ADDRESS,
+          abi: ORACLE_POLL_ABI,
+          functionName: 'polls',
+          args: [BigInt(pId)]
+        });
+
+        const isResolved = onChainPoll[5];
+        const winner = Number(onChainPoll[6]);
+
+        if (isResolved) {
+          console.log(`Poll ${pId} is actually resolved! Updating view...`);
+
+          setHistory(prev => prev.map(pi => {
+            if (pi.pollInfo.contractPollId === pId) {
+              return {
+                ...pi,
+                pollInfo: { ...pi.pollInfo, resolved: true, winningOptionIndex: winner }
+              };
+            }
+            return pi;
+          }));
+
+          // Trigger backend sync silently
+          fetch(`${import.meta.env.VITE_API_URL}/api/polls/sync`, { method: 'POST' }).catch(() => { });
+        }
+      } catch (e) {
+        console.error("Failed to verify poll", item.pollInfo.contractPollId, e);
+      }
     }
   };
 
