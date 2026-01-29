@@ -4,9 +4,9 @@ import { sdk } from '@farcaster/miniapp-sdk';
 import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, X, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, usePublicClient, useSwitchChain, useBalance, useSendTransaction, useWatchContractEvent } from 'wagmi';
+import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, usePublicClient, useSwitchChain, useBalance, useWatchContractEvent } from 'wagmi';
 import { injected } from 'wagmi/connectors';
-import { keccak256, encodePacked, stringToHex, formatUnits, type Hex, encodeFunctionData, pad, toHex } from 'viem';
+import { keccak256, encodePacked, stringToHex, formatUnits, type Hex, pad, toHex } from 'viem';
 import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI, BASE_USDC_ADDRESS } from './constants';
 import { erc20Abi } from 'viem';
 
