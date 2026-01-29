@@ -1109,24 +1109,31 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
 
         // 3. Check Reveal Status (if in reveal phase and not revealed)
         let isRevealed = item.revealed;
-        if (!isRevealed && now >= item.pollInfo.commitEndTime) {
+        if (!isRevealed && now >= item.pollInfo.commitEndTime && now < item.pollInfo.revealEndTime) {
           try {
-            const recordedOption = await publicClient.readContract({
+            // We use simulation to check if we CAN reveal.
+            // If effective simulation succeeds, it means we haven't revealed yet.
+            // If it fails, it likely means we have already revealed.
+            await publicClient.simulateContract({
               address: ORACLE_POLL_ADDRESS,
               abi: ORACLE_POLL_ABI,
-              functionName: 'votes',
-              args: [BigInt(pId), address as `0x${string}`, BigInt(item.commitmentIndex)]
+              functionName: 'revealVote',
+              args: [
+                BigInt(pId),
+                BigInt(item.commitmentIndex),
+                BigInt(item.optionIndex),
+                item.salt as Hex
+              ],
+              account: address as `0x${string}`
             });
-
-            // If it returns the option we voted for (and not 0 if ambiguous), it's revealed.
-            // Or if it returns ANY non-zero value, it's definitely revealed.
-            // If we voted 0 and it returns 0, we can't be sure from 'votes' mapping alone easily 
-            // without simulating, but for common cases:
-            if (Number(recordedOption) === item.optionIndex) {
-              isRevealed = true;
-            }
+            // If we get here, simulation succeeded => NOT revealed yet.
+            // So isRevealed remains false (or item.revealed).
           } catch (e) {
-            console.warn("Failed to check reveal status", e);
+            // Simulation failed.
+            // Assuming valid params (salt, etc from backend), this means "Already Revealed"
+            // or some other blocker. We'll assume revealed to hide the button.
+            console.log(`Simulation failed for poll ${pId} (likely revealed):`, e);
+            isRevealed = true;
           }
         }
 
