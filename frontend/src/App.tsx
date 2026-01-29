@@ -1083,8 +1083,28 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
   };
 
   const handleClaim = async (pId: number, commitmentIndex: number) => {
-    if (!address) return;
+    if (!address || !publicClient) return;
     try {
+      // 1. Check if already claimed on-chain
+      const isClaimedOnChain = await publicClient.readContract({
+        address: ORACLE_POLL_ADDRESS,
+        abi: ORACLE_POLL_ABI,
+        functionName: 'rewardClaimed',
+        args: [BigInt(pId), address as `0x${string}`, BigInt(commitmentIndex)]
+      });
+
+      if (isClaimedOnChain) {
+        onSuccess("Already Claimed", "You have already claimed this reward! ✅");
+        // Update local state immediately
+        setHistory(prev => prev.map(item => {
+          if (item.pollInfo.contractPollId === pId) {
+            return { ...item, claimed: true };
+          }
+          return item;
+        }));
+        return;
+      }
+
       await writeReveal({
         address: ORACLE_POLL_ADDRESS,
         abi: ORACLE_POLL_ABI,
