@@ -752,6 +752,82 @@ function RevealZone({ pollId, options, onSuccess, onError, phase }: { pollId: nu
   /* New Hook for publicClient */
   const publicClient = usePublicClient();
 
+  useEffect(() => {
+    const verifyRevealed = async () => {
+      if (!publicClient || localVotes.length === 0) return;
+
+      // Filter votes that are NOT yet marked as revealed locally
+      const toCheck = localVotes.filter(v => !v.revealed);
+      if (toCheck.length === 0) return;
+
+      console.log(`Verifying ${toCheck.length} votes for reveal status...`);
+      let updates: any = {};
+
+      for (const v of toCheck) {
+        // Throttle to avoid 429
+        await new Promise(r => setTimeout(r, 1000));
+
+        try {
+          // 1. First check the public mapping 'votes'
+          // ABI: votes(pollId, voter, commitmentIndex) -> optionIndex
+          const recordedOption = await publicClient.readContract({
+            address: ORACLE_POLL_ADDRESS,
+            abi: ORACLE_POLL_ABI,
+            functionName: 'votes',
+            args: [BigInt(pollId), address as `0x${string}`, BigInt(v.commitmentIndex)]
+          });
+
+          // If recorded option matches our local vote, it is confirmed revealed
+          // Note: Option 0 is ambiguous if default is 0, so we skip optimizaton for 0 unless we are sure.
+          // But for now, if it matches, we assume revealed.
+          // Wait, if I voted 0, and it returns 0 (default), it's ambiguous.
+          // If I voted 1, and it returns 1, it's definitely revealed.
+
+          if (Number(recordedOption) === v.vote && v.vote !== 0) {
+            console.log("Verified reveal via view:", v.commitmentIndex);
+            updates[v.commitmentIndex] = true;
+            continue;
+          }
+
+          // 2. Fallback: Simulate the reveal transaction
+          // If it succeeds, it means we CAN reveal => Not revealed yet.
+          // If it fails, it means we CANNOT reveal => Likely already revealed.
+          await publicClient.simulateContract({
+            address: ORACLE_POLL_ADDRESS,
+            abi: ORACLE_POLL_ABI,
+            functionName: 'revealVote',
+            args: [
+              BigInt(pollId),
+              BigInt(v.commitmentIndex),
+              BigInt(v.vote),
+              v.salt as Hex
+            ],
+            account: address as `0x${string}`
+          });
+          // If we get here, it succeeded, so it is NOT revealed.
+
+        } catch (e: any) {
+          // Simulation failed. 
+          // Either invalid params (unlikely if locally stored) or ALREADY REVEALED.
+          // We assume already revealed to be safe and hide the button.
+          console.log("Simulation failed (likely revealed):", v.commitmentIndex);
+          updates[v.commitmentIndex] = true;
+        }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        setLocalVotes(prev => prev.map(p => {
+          if (updates[p.commitmentIndex]) {
+            return { ...p, revealed: true };
+          }
+          return p;
+        }));
+      }
+    };
+
+    verifyRevealed();
+  }, [publicClient, localVotes.length, pollId, address]);
+
   const handleReveal = async (v: any, index: number) => {
     if (!address || !publicClient) return;
 
@@ -775,9 +851,11 @@ function RevealZone({ pollId, options, onSuccess, onError, phase }: { pollId: nu
       setRevealingIndex(null);
       onSuccess("Vote Revealed!", "Your vote has been recorded on-chain.");
 
-      // Remove from UI and LocalStorage
+      // Mark as revealed in UI instead of removing?
+      // User requested "lo conto y la visual lo pone para poder revelarlo nuevamente"
+      // So we should keep it but mark REVEALED.
       setLocalVotes((prev) => {
-        const next = prev.filter((_, i) => i !== index);
+        const next = prev.map((item, i) => i === index ? { ...item, revealed: true } : item);
         const storageKey = `oracle_poll_votes_${pollId}_${address}`;
         localStorage.setItem(storageKey, JSON.stringify(next));
         return next;
@@ -833,13 +911,19 @@ function RevealZone({ pollId, options, onSuccess, onError, phase }: { pollId: nu
                 LOCKED
               </div>
             ) : (
-              <button
-                onClick={() => handleReveal(v, i)}
-                disabled={revealingIndex !== null}
-                className="px-6 py-3 bg-candy-yellow text-gray-900 font-black rounded-2xl shadow-lg hover:scale-[1.05] active:scale-95 transition-all disabled:opacity-50"
-              >
-                {revealingIndex === i ? "REVEALING..." : "REVEAL"}
-              </button>
+              v.revealed ? (
+                <div className="px-4 py-2 bg-green-100 text-green-600 font-bold text-xs rounded-xl flex items-center gap-2 border border-green-200">
+                  <CheckCircle size={14} /> REVEALED
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleReveal(v, i)}
+                  disabled={revealingIndex !== null}
+                  className="px-6 py-3 bg-candy-yellow text-gray-900 font-black rounded-2xl shadow-lg hover:scale-[1.05] active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {revealingIndex === i ? "REVEALING..." : "REVEAL"}
+                </button>
+              )
             )}
           </motion.div>
         )
