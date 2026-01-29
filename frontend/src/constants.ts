@@ -480,5 +480,18 @@ export const ORACLE_POLL_ABI = [
         ],
         "stateMutability": "view",
         "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_pollId",
+                "type": "uint256"
+            }
+        ],
+        "name": "resolvePoll",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
     }
 ] as const;
