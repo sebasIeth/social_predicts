@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import connectDB from './config/db';
 import pollRoutes from './routes/polls';
 import voteRoutes from './routes/votes';
+import userRoutes from './routes/users';
 
 dotenv.config();
 
@@ -19,6 +20,7 @@ app.use(express.json());
 // Routes
 app.use('/api/polls', pollRoutes);
 app.use('/api/votes', voteRoutes);
+app.use('/api/users', userRoutes);
 
 const PORT = process.env.PORT || 5001;
 

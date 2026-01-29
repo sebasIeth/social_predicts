@@ -932,22 +932,7 @@ function RevealZone({ pollId, options, onSuccess, onError, phase }: { pollId: nu
   );
 }
 
-function LeaderboardView() {
-  return (
-    <div className="space-y-3">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="bg-white p-4 rounded-3xl flex items-center gap-4 shadow-sm border border-gray-50">
-          <span className="font-black text-gray-300 text-lg mx-2">#{i}</span>
-          <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${i * 32}`} className="w-12 h-12 rounded-full bg-gray-100" />
-          <div>
-            <h4 className="font-bold text-gray-800">CryptoWizard</h4>
-            <p className="text-xs font-bold text-candy-mint">98% Accuracy</p>
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
+
 
 function ProfileView({ address, now, onSuccess, onError }: { address: string | undefined, now: number, onSuccess: (t: string, m: string) => void, onError: (t: string, m: string) => void }) {
   const handleResolve = async (pId: number) => {
@@ -1233,6 +1218,17 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
         return item;
       }));
 
+      // Record win in backend
+      try {
+        await fetch(`${import.meta.env.VITE_API_URL}/api/users/record-win`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ walletAddress: address })
+        });
+      } catch (err) {
+        console.error("Failed to record win:", err);
+      }
+
     } catch (e: any) {
       console.error(e);
       const msg = e.details || e.shortMessage || e.message || "An unexpected error occurred.";
@@ -1291,13 +1287,13 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
                     </span>
                     <span className={cn(
                       "text-[10px] font-black uppercase px-2 py-0.5 rounded",
-                      isOpen ? "bg-green-100 text-green-600" :
-                        (isRevealPhase ? "bg-yellow-100 text-yellow-600" :
-                          (isResolved ? (isWinner ? "bg-green-500 text-white" : "bg-red-100 text-red-600") : "bg-gray-200 text-gray-500"))
+                      isResolved ? (isWinner ? "bg-green-500 text-white" : "bg-red-100 text-red-600") :
+                        (isOpen ? "bg-green-100 text-green-600" :
+                          (isRevealPhase ? "bg-yellow-100 text-yellow-600" : "bg-gray-200 text-gray-500"))
                     )}>
-                      {isOpen ? "OPEN" :
-                        (isRevealPhase ? "REVEAL PHASE" :
-                          (isResolved ? (isWinner ? "WINNER!" : "LOST") : "PENDING RESOLUTION"))}
+                      {isResolved ? (isWinner ? "WINNER!" : "LOST") :
+                        (isOpen ? "OPEN" :
+                          (isRevealPhase ? "REVEAL PHASE" : "PENDING RESOLUTION"))}
                     </span>
                   </div>
                 </div>
@@ -1368,5 +1364,92 @@ function NavButton({ active, onClick, icon, label, color }: any) {
       </div>
       {active && <span className="text-[10px] font-black uppercase tracking-wider">{label}</span>}
     </button>
+  );
+}
+
+function LeaderboardView() {
+  const [leaders, setLeaders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/leaderboard`);
+        const data = await res.json();
+        setLeaders(data);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLeaderboard();
+  }, []);
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center h-64 space-y-4">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      <p className="text-gray-400 font-medium">Loading Rankings...</p>
+    </div>
+  );
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      className="space-y-4"
+    >
+      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-[2rem] p-8 text-white shadow-lg mb-6">
+        <h2 className="text-3xl font-display font-black mb-2">Leaderboard 🏆</h2>
+        <p className="text-purple-100 font-medium opacity-80">Top predictors based on wins</p>
+      </div>
+
+      <div className="space-y-3">
+        {leaders.map((user, index) => (
+          <div key={user.address} className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className={cn(
+                "w-10 h-10 rounded-full flex items-center justify-center font-black text-sm border-2",
+                index === 0 ? "bg-yellow-100 text-yellow-600 border-yellow-200" :
+                  index === 1 ? "bg-gray-100 text-gray-500 border-gray-200" :
+                    index === 2 ? "bg-orange-100 text-orange-600 border-orange-200" :
+                      "bg-blue-50 text-blue-500 border-blue-100"
+              )}>
+                #{index + 1}
+              </div>
+              <div>
+                <p className="font-bold text-gray-800 text-sm">
+                  {user.address.slice(0, 6)}...{user.address.slice(-4)}
+                  {index === 0 && " 👑"}
+                </p>
+                <p className="text-xs text-gray-400 font-medium">
+                  {user.gamesPlayed} games played
+                </p>
+              </div>
+            </div>
+
+            <div className="text-right">
+              <p className="font-black text-gray-800 text-lg">{user.gamesWon} Wins</p>
+              <div className="flex items-center justify-end space-x-1">
+                <span className={cn(
+                  "text-xs font-bold px-2 py-0.5 rounded-full",
+                  parseFloat(user.winRate) >= 50 ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-500"
+                )}>
+                  {user.winRate}% WR
+                </span>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {leaders.length === 0 && (
+          <div className="text-center py-12 text-gray-400">
+            <Trophy size={48} className="mx-auto mb-3 opacity-20" />
+            <p>No winners yet. Be the first!</p>
+          </div>
+        )}
+      </div>
+    </motion.div>
   );
 }

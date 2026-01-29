@@ -1,5 +1,6 @@
 import express from 'express';
 import Vote from '../models/Vote';
+import User from '../models/User';
 
 const router = express.Router();
 
@@ -18,6 +19,14 @@ router.post('/', async (req, res) => {
         });
 
         const vote = await newVote.save();
+
+        // Update User stats
+        await User.findOneAndUpdate(
+            { walletAddress: voterAddress },
+            { $inc: { gamesPlayed: 1 }, $set: { lastActive: new Date() } },
+            { upsert: true }
+        );
+
         res.json(vote);
     } catch (err: any) {
         console.error(err.message);
