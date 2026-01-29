@@ -5,7 +5,13 @@ import connectDB from './config/db';
 import pollRoutes from './routes/polls';
 import voteRoutes from './routes/votes';
 
-dotenv.config();
+const result = dotenv.config({ path: __dirname + '/../.env' });
+if (result.error) {
+    console.log("Dotenv error:", result.error);
+    // Try default
+    dotenv.config();
+}
+console.log("Env loaded. Mongo URI:", process.env.MONGODB_URI);
 
 const app = express();
 

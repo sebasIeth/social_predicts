@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { sdk } from '@farcaster/miniapp-sdk';
+import { OpenfortButton } from "@openfort/react";
 import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, X, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -194,14 +195,22 @@ export default function App() {
                 </button>
               )}
 
+              <div className="ml-2 scale-90">
+                <OpenfortButton />
+              </div>
+
               {/* Debug: Create Poll Button (Dev Only) */}
-              {import.meta.env.DEV && isConnected && (
-                <button
-                  onClick={handleCreatePoll}
-                  className="px-3 py-2 bg-red-500 text-white rounded-xl text-xs font-bold hover:bg-red-600 ml-2"
-                >
-                  + Poll
-                </button>
+              {import.meta.env.DEV && (
+                <div className="flex gap-2 ml-2">
+                  {isConnected && (
+                    <button
+                      onClick={handleCreatePoll}
+                      className="px-3 py-2 bg-red-500 text-white rounded-xl text-xs font-bold hover:bg-red-600"
+                    >
+                      + Poll
+                    </button>
+                  )}
+                </div>
               )}
             </header>
 
