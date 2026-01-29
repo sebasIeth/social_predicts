@@ -976,19 +976,23 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
   const verifyStuckPolls = async (items: any[]) => {
     if (!publicClient) return;
 
-    const stuckItems = items.filter(item => {
+    const pollsToCheck = items.filter(item => {
       const poll = item.pollInfo;
-      const hasEnded = now >= poll.revealEndTime;
-      return hasEnded && !poll.resolved;
+      // Check if stuck (ended but not resolved) OR won (need to check claim status)
+      const stuck = (now >= poll.revealEndTime && !poll.resolved);
+      const won = (poll.resolved && poll.winningOptionIndex === item.optionIndex);
+      return stuck || won;
     });
 
-    if (stuckItems.length === 0) return;
+    if (pollsToCheck.length === 0) return;
 
-    console.log(`Verifying ${stuckItems.length} potentially stuck polls...`);
+    console.log(`Verifying ${pollsToCheck.length} polls for resolution/claim status...`);
 
-    for (const item of stuckItems) {
+    for (const item of pollsToCheck) {
       try {
         const pId = item.pollInfo.contractPollId;
+
+        // 1. Check Poll State
         const onChainPoll = await publicClient.readContract({
           address: ORACLE_POLL_ADDRESS,
           abi: ORACLE_POLL_ABI,
@@ -999,21 +1003,38 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
         const isResolved = onChainPoll[5];
         const winner = Number(onChainPoll[6]);
 
-        if (isResolved) {
-          console.log(`Poll ${pId} is actually resolved! Updating view...`);
+        // 2. Check Claim Status (if winner)
+        let isClaimed = item.claimed;
+        if (isResolved && winner === item.optionIndex) {
+          try {
+            isClaimed = await publicClient.readContract({
+              address: ORACLE_POLL_ADDRESS,
+              abi: ORACLE_POLL_ABI,
+              functionName: 'rewardClaimed',
+              args: [BigInt(pId), address as `0x${string}`, BigInt(item.commitmentIndex)]
+            });
+          } catch (e) {
+            console.warn("Failed to check claim status", e);
+          }
+        }
+
+        if (isResolved || isClaimed !== item.claimed) {
+          console.log(`Updating poll ${pId}: Resolved=${isResolved}, Claimed=${isClaimed}`);
 
           setHistory(prev => prev.map(pi => {
             if (pi.pollInfo.contractPollId === pId) {
-              return {
-                ...pi,
-                pollInfo: { ...pi.pollInfo, resolved: true, winningOptionIndex: winner }
-              };
+              const updated = { ...pi };
+              updated.pollInfo = { ...pi.pollInfo, resolved: true, winningOptionIndex: winner };
+              if (isClaimed) updated.claimed = true;
+              return updated;
             }
             return pi;
           }));
 
-          // Trigger backend sync silently
-          fetch(`${import.meta.env.VITE_API_URL}/api/polls/sync`, { method: 'POST' }).catch(() => { });
+          // Trigger backend sync silently if meaningful change
+          if (isResolved) {
+            fetch(`${import.meta.env.VITE_API_URL}/api/polls/sync`, { method: 'POST' }).catch(() => { });
+          }
         }
       } catch (e) {
         console.error("Failed to verify poll", item.pollInfo.contractPollId, e);
@@ -1071,7 +1092,15 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
         args: [BigInt(pId), BigInt(commitmentIndex)]
       });
       onSuccess("Reward Claimed!", "Funds sent to your wallet.");
-      fetchHistory();
+
+      // Update local state immediately
+      setHistory(prev => prev.map(item => {
+        if (item.pollInfo.contractPollId === pId) {
+          return { ...item, claimed: true };
+        }
+        return item;
+      }));
+
     } catch (e: any) {
       console.error(e);
       const msg = e.details || e.shortMessage || e.message || "An unexpected error occurred.";
@@ -1170,13 +1199,19 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
                   </button>
                 )}
 
-                {isWinner && (
+                {isWinner && !item.claimed && (
                   <button
                     onClick={() => handleClaim(poll.contractPollId, item.commitmentIndex)}
                     className="w-full py-3 bg-candy-mint text-white rounded-xl text-xs font-bold shadow-lg shadow-candy-mint/20 hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
                   >
                     <Trophy size={14} /> CLAIM REWARD
                   </button>
+                )}
+
+                {isWinner && item.claimed && (
+                  <div className="w-full py-3 bg-green-100 text-green-600 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2 border border-green-200">
+                    <CheckCircle size={14} /> REWARD CLAIMED
+                  </div>
                 )}
               </div>
             </div>
