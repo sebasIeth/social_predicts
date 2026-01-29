@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, X, AlertCircle, Gavel } from 'lucide-react';
+import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, X, AlertCircle, Gavel, Eye, EyeOff } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, usePublicClient, useSwitchChain, useBalance, useWatchContractEvent, useReadContracts } from 'wagmi';
@@ -294,6 +294,7 @@ export default function App() {
                     options={options || []}
                     onSuccess={showSuccess}
                     onError={showError}
+                    phase={phase}
                   />
                 )}
                 {activeTab === 'LEADERBOARD' && <LeaderboardView key="leader" />}
@@ -705,45 +706,47 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
   );
 }
 
-function RevealZone({ pollId, options, onSuccess, onError }: { pollId: number, options: readonly string[], onSuccess: (t: string, m: string) => void, onError: (t: string, m: string) => void }) {
+function RevealZone({ pollId, options, onSuccess, onError, phase }: { pollId: number, options: readonly string[], onSuccess: (t: string, m: string) => void, onError: (t: string, m: string) => void, phase: string }) {
   const [localVotes, setLocalVotes] = useState<any[]>([]);
   const { address } = useAccount();
   const { writeContractAsync: writeReveal } = useWriteContract();
   const [revealingIndex, setRevealingIndex] = useState<number | null>(null);
+  const [visibleVotes, setVisibleVotes] = useState<Set<number>>(new Set());
+
+  const toggleVisibility = (index: number) => {
+    setVisibleVotes(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
 
   useEffect(() => {
     const syncVotes = async () => {
+      // ... same logic
       if (!address) return;
-
-      // 1. Check local storage first (immediate)
       const storageKey = `oracle_poll_votes_${pollId}_${address}`;
       let saved = JSON.parse(localStorage.getItem(storageKey) || '[]');
-
-      // 2. Always try to sync with DB to be sure
       try {
         const res = await fetch(`${import.meta.env.VITE_API_URL}/api/votes/user/${address}`);
         const dbVotes = await res.json();
         const relevant = dbVotes.filter((v: any) => v.pollId === pollId);
-
         if (relevant.length > 0) {
-          // Merge or prioritize DB data for security/cross-device
           const formatted = relevant.map((rv: any) => ({
             vote: rv.optionIndex,
             salt: rv.salt,
             commitmentIndex: rv.commitmentIndex
           }));
           setLocalVotes(formatted);
-          // Update local for next time
           localStorage.setItem(storageKey, JSON.stringify(formatted));
         } else {
           setLocalVotes(saved);
         }
       } catch (e) {
-        console.error("DB Sync failed, falling back to local:", e);
         setLocalVotes(saved);
       }
     };
-
     syncVotes();
   }, [address, pollId]);
 
@@ -789,6 +792,8 @@ function RevealZone({ pollId, options, onSuccess, onError }: { pollId: number, o
     }
   };
 
+  const isRevealPhase = phase === 'REVEAL';
+
   if (localVotes.length === 0) {
     return (
       <div className="bg-white/50 rounded-[2.5rem] p-8 text-center border-2 border-dashed border-gray-200">
@@ -799,32 +804,47 @@ function RevealZone({ pollId, options, onSuccess, onError }: { pollId: number, o
 
   return (
     <div className="space-y-4">
-      {localVotes.map((v, i) => (
-        <motion.div
-          key={i}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.1 }}
-          className="bg-white rounded-3xl p-5 flex items-center justify-between shadow-sm border border-gray-100"
-        >
-          <div className="text-left">
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">
-              Vote #{i + 1}
-            </span>
-            <span className="font-display font-bold text-gray-800 text-lg">
-              {options[v.vote] || `Option ${v.vote}`}
-            </span>
-          </div>
-
-          <button
-            onClick={() => handleReveal(v, i)}
-            disabled={revealingIndex !== null}
-            className="px-6 py-3 bg-candy-yellow text-gray-900 font-black rounded-2xl shadow-lg hover:scale-[1.05] active:scale-95 transition-all disabled:opacity-50"
+      {localVotes.map((v, i) => {
+        const isVisible = visibleVotes.has(i);
+        return (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }}
+            className="bg-white rounded-3xl p-5 flex items-center justify-between shadow-sm border border-gray-100"
           >
-            {revealingIndex === i ? "REVEALING..." : "REVEAL"}
-          </button>
-        </motion.div>
-      ))}
+            <div className="text-left">
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">
+                Vote #{i + 1}
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="font-display font-bold text-gray-800 text-lg">
+                  {isVisible ? (options[v.vote] || `Option ${v.vote}`) : '••••••••'}
+                </span>
+                <button onClick={() => toggleVisibility(i)} className="text-gray-400 hover:text-gray-600">
+                  {isVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {!isRevealPhase ? (
+              <div className="px-4 py-2 bg-gray-100 text-gray-500 font-bold text-xs rounded-xl flex items-center gap-2">
+                <Unlock size={12} className="text-gray-400" />
+                LOCKED
+              </div>
+            ) : (
+              <button
+                onClick={() => handleReveal(v, i)}
+                disabled={revealingIndex !== null}
+                className="px-6 py-3 bg-candy-yellow text-gray-900 font-black rounded-2xl shadow-lg hover:scale-[1.05] active:scale-95 transition-all disabled:opacity-50"
+              >
+                {revealingIndex === i ? "REVEALING..." : "REVEAL"}
+              </button>
+            )}
+          </motion.div>
+        )
+      })}
     </div>
   );
 }
@@ -850,6 +870,25 @@ function ProfileView({ address, now, onVoteAgain }: { address: string | undefine
   const handleResolve = async (pId: number) => {
     if (!address || !publicClient) return;
     try {
+      // 1. Check on-chain status first to avoid "transaction will fail" errors
+      const onChainPoll = await publicClient.readContract({
+        address: ORACLE_POLL_ADDRESS,
+        abi: ORACLE_POLL_ABI,
+        functionName: 'polls',
+        args: [BigInt(pId)]
+      });
+
+      // polls returns struct: [id, question, commitEnd, revealEnd, totalStake, resolved, winner]
+      const isResolvedOnChain = onChainPoll[5];
+
+      if (isResolvedOnChain) {
+        alert("Poll is already resolved on-chain! Refreshing data...");
+        // Force sync with backend
+        await fetch(`${import.meta.env.VITE_API_URL}/api/polls/sync`, { method: 'POST' }).catch(console.error);
+        fetchHistory();
+        return;
+      }
+
       const hash = await writeReveal({
         address: ORACLE_POLL_ADDRESS,
         abi: ORACLE_POLL_ABI,
@@ -860,9 +899,14 @@ function ProfileView({ address, now, onVoteAgain }: { address: string | undefine
       await publicClient.waitForTransactionReceipt({ hash });
       alert("Poll Resolved! Computing winners...");
       fetchHistory();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Resolve Failed");
+      const msg = e.details || e.shortMessage || e.message || "Unknown error";
+      if (msg.includes("Resolution time not reached")) {
+        alert("Cannot resolve yet: Reveal phase not fully ended on-chain.");
+      } else {
+        alert("Resolve Failed: " + msg);
+      }
     }
   };
 
