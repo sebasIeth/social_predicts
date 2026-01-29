@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, X, AlertCircle } from 'lucide-react';
+import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, X, AlertCircle, Gavel } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, usePublicClient, useSwitchChain, useBalance, useWatchContractEvent, useReadContracts } from 'wagmi';
@@ -847,10 +847,30 @@ function LeaderboardView() {
 }
 
 function ProfileView({ address, now, onVoteAgain }: { address: string | undefined, now: number, onVoteAgain: (id: number) => void }) {
+  const handleResolve = async (pId: number) => {
+    if (!address || !publicClient) return;
+    try {
+      const hash = await writeReveal({
+        address: ORACLE_POLL_ADDRESS,
+        abi: ORACLE_POLL_ABI,
+        functionName: 'resolvePoll',
+        args: [BigInt(pId)]
+      });
+      console.log("Resolve Hash:", hash);
+      await publicClient.waitForTransactionReceipt({ hash });
+      alert("Poll Resolved! Computing winners...");
+      fetchHistory();
+    } catch (e) {
+      console.error(e);
+      alert("Resolve Failed");
+    }
+  };
+
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { writeContractAsync: writeReveal } = useWriteContract();
   const [revealingIndices, setRevealingIndices] = useState<Set<string>>(new Set());
+  const publicClient = usePublicClient();
 
   const fetchHistory = async () => {
     if (!address) return;
@@ -952,6 +972,7 @@ function ProfileView({ address, now, onVoteAgain }: { address: string | undefine
           const poll = item.pollInfo;
           const isOpen = now < poll.commitEndTime;
           const isRevealPhase = now >= poll.commitEndTime && now < poll.revealEndTime;
+          const hasEnded = now >= poll.revealEndTime;
           const isResolved = poll.resolved;
           const isWinner = isResolved && poll.winningOptionIndex === item.optionIndex;
 
@@ -973,11 +994,11 @@ function ProfileView({ address, now, onVoteAgain }: { address: string | undefine
                       "text-[10px] font-black uppercase px-2 py-0.5 rounded",
                       isOpen ? "bg-green-100 text-green-600" :
                         (isRevealPhase ? "bg-yellow-100 text-yellow-600" :
-                          (isWinner ? "bg-green-500 text-white" : "bg-red-100 text-red-600"))
+                          (isResolved ? (isWinner ? "bg-green-500 text-white" : "bg-red-100 text-red-600") : "bg-gray-200 text-gray-500"))
                     )}>
                       {isOpen ? "OPEN" :
                         (isRevealPhase ? "REVEAL PHASE" :
-                          (isResolved ? (isWinner ? "WINNER!" : "LOST") : "CLOSED"))}
+                          (isResolved ? (isWinner ? "WINNER!" : "LOST") : "PENDING RESOLUTION"))}
                     </span>
                   </div>
                 </div>
@@ -1006,6 +1027,16 @@ function ProfileView({ address, now, onVoteAgain }: { address: string | undefine
                   <div className="w-full py-3 bg-gray-100 text-gray-400 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2">
                     <CheckCircle size={14} /> REVEALED
                   </div>
+                )}
+
+                {/* Show Resolve Button if ended but not resolved */}
+                {hasEnded && !isResolved && (
+                  <button
+                    onClick={() => handleResolve(poll.contractPollId)}
+                    className="w-full py-3 bg-gray-900 text-white rounded-xl text-xs font-bold shadow-lg hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
+                  >
+                    <Gavel size={14} /> RESOLVE POLL
+                  </button>
                 )}
 
                 {isWinner && (
