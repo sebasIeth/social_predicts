@@ -138,8 +138,8 @@ export default function App() {
       if (!address) return;
       const title = "Will Bitcoin hit $100k in 2026? 🚀";
       const options = ["Yes", "No", "Maybe"];
-      const commitDuration = 600; // 10 mins
-      const revealDuration = 600; // 10 mins
+      const commitDuration = 120; // 2 mins
+      const revealDuration = 120; // 2 mins
 
       await writeContractAsync({
         address: ORACLE_POLL_ADDRESS,
