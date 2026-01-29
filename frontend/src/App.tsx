@@ -303,9 +303,6 @@ export default function App() {
                     key="profile"
                     address={address}
                     now={now}
-                    onVoteAgain={() => {
-                      setActiveTab('VOTE');
-                    }}
                   />
                 )}
               </AnimatePresence>
@@ -866,7 +863,7 @@ function LeaderboardView() {
   )
 }
 
-function ProfileView({ address, now, onVoteAgain }: { address: string | undefined, now: number, onVoteAgain: (id: number) => void }) {
+function ProfileView({ address, now }: { address: string | undefined, now: number }) {
   const handleResolve = async (pId: number) => {
     if (!address || !publicClient) return;
     try {
@@ -1049,14 +1046,7 @@ function ProfileView({ address, now, onVoteAgain }: { address: string | undefine
               </div>
 
               <div className="grid grid-cols-1 gap-2">
-                {isOpen && (
-                  <button
-                    onClick={() => onVoteAgain(poll.contractPollId)}
-                    className="w-full py-3 bg-gray-50 text-gray-600 rounded-xl text-xs font-bold hover:bg-candy-purple hover:text-white transition-all flex items-center justify-center gap-2"
-                  >
-                    <Sparkles size={14} /> VOTE AGAIN
-                  </button>
-                )}
+                {/* VOTE AGAIN Removed as requested */}
 
                 {isRevealPhase && !item.revealed && (
                   <button
