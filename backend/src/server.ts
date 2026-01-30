@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import connectDB from './config/db';
 import pollRoutes from './routes/polls';
 import voteRoutes from './routes/votes';
+import openfortRoutes from './routes/openfort';
 
 const result = dotenv.config({ path: __dirname + '/../.env' });
 if (result.error) {
@@ -21,6 +22,7 @@ app.use(express.json());
 
 app.use('/api/polls', pollRoutes);
 app.use('/api/votes', voteRoutes);
+app.use('/api', openfortRoutes);
 
 const PORT = process.env.PORT || 5001;
 

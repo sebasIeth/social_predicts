@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { OpenfortButton } from "@openfort/react";
+import { OpenfortButton, useSignOut } from "@openfort/react";
 import { AuthContainer } from './components/auth/AuthContainer';
 import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, X, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -150,6 +150,20 @@ export default function App() {
     }
   };
 
+  const { signOut } = useSignOut();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      disconnect();
+      setIsEmailAuthenticated(false);
+      setIsGuest(false);
+      alert("Logged out successfully");
+    } catch (err) {
+      console.error("Logout failed", err);
+    }
+  };
+
   const showSuccess = (title: string, message: string) => {
     setFeedbackModal({ isOpen: true, type: 'success', title, message });
   };
@@ -290,6 +304,7 @@ export default function App() {
                     onVoteAgain={() => {
                       setActiveTab('VOTE');
                     }}
+                    onLogout={handleLogout}
                   />
                 )}
               </AnimatePresence>
@@ -766,7 +781,7 @@ function LeaderboardView() {
   )
 }
 
-function ProfileView({ address, now, onVoteAgain }: { address: string | undefined, now: number, onVoteAgain: (id: number) => void }) {
+function ProfileView({ address, now, onVoteAgain, onLogout }: { address: string | undefined, now: number, onVoteAgain: (id: number) => void, onLogout: () => void }) {
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { writeContractAsync: writeReveal } = useWriteContract();
@@ -861,6 +876,14 @@ function ProfileView({ address, now, onVoteAgain }: { address: string | undefine
         <div className="text-center">
           <p className="text-xs font-bold text-gray-400 uppercase mb-1">Est. Won</p>
           <p className="text-3xl font-display font-black text-candy-mint">{totalWon.toFixed(3)} USDC</p>
+        </div>
+        <div className="col-span-2 pt-4 border-t border-gray-100 mt-2">
+          <button
+            onClick={onLogout}
+            className="w-full py-3 bg-gray-100 text-gray-400 font-bold rounded-xl hover:bg-red-50 hover:text-red-500 transition-all flex items-center justify-center gap-2"
+          >
+            LOGOUT
+          </button>
         </div>
       </div>
 

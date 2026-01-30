@@ -1,0 +1,7 @@
+[33mab2621f[m[33m ([m[1;36mHEAD -> [m[1;32mfeature/openfort[m[33m)[m HEAD@{0}: reset: moving to HEAD~1
+[33mff553cb[m HEAD@{1}: commit: feature/auth with email
+[33mab2621f[m[33m ([m[1;36mHEAD -> [m[1;32mfeature/openfort[m[33m)[m HEAD@{2}: commit: code improved
+[33mc805cca[m HEAD@{3}: commit: remove button innecesary
+[33m87f53c8[m HEAD@{4}: commit: openfort added
+[33m0d5b7b6[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m HEAD@{5}: checkout: moving from main to feature/openfort
+[33m0d5b7b6[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m HEAD@{6}: clone: from https://github.com/sebasIeth/social_predicts.git
