@@ -261,6 +261,45 @@
       "artifacts": [
         "IERC165"
       ]
+    },
+    "/Users/sebastianramirezgarcua/x4llet/social-market/contracts/contracts/DebugOraclePoll.sol": {
+      "lastModificationDate": 1769790398940,
+      "contentHash": "7253f02e93920decceadbeadf948ee58",
+      "sourceName": "contracts/DebugOraclePoll.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/token/ERC20/IERC20.sol",
+        "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "DebugOraclePoll"
+      ]
     }
   }
 }

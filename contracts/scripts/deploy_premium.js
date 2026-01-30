@@ -4,7 +4,7 @@ async function main() {
     const usdcAddress = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // Base USDC
     console.log("Deploying OraclePoll to Base with USDC:", usdcAddress);
 
-    const OraclePoll = await hre.ethers.getContractFactory("OraclePoll");
+    const OraclePoll = await hre.ethers.getContractFactory("DebugOraclePoll");
     const oraclePoll = await OraclePoll.deploy(usdcAddress);
 
     await oraclePoll.waitForDeployment();

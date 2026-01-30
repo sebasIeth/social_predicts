@@ -35,10 +35,25 @@ export function PremiumStatus() {
         query: { enabled: !!address }
     });
 
+    // Check USDC Balance
+    const { data: usdcBalance } = useReadContract({
+        address: BASE_USDC_ADDRESS,
+        abi: erc20Abi,
+        functionName: 'balanceOf',
+        args: [address!],
+        query: { enabled: !!address }
+    });
+
     const [showModal, setShowModal] = useState(false);
 
     const handleBuyPremium = async () => {
-        if (!address || !publicClient || !membershipCost) return;
+        if (!address || !publicClient || !membershipCost || usdcBalance === undefined) return;
+
+        if (usdcBalance < membershipCost) {
+            alert("Insufficient USDC Balance!");
+            return;
+        }
+
         setIsBuying(true);
         try {
             // 1. Approve if needed
@@ -59,7 +74,8 @@ export function PremiumStatus() {
             const hash = await writeContractAsync({
                 address: ORACLE_POLL_ADDRESS,
                 abi: ORACLE_POLL_ABI,
-                functionName: 'buyPremium'
+                functionName: 'buyPremium',
+                gas: 500000n // Force gas limit to bypass estimation errors
             });
             await publicClient.waitForTransactionReceipt({ hash });
             await refetchPremium();
