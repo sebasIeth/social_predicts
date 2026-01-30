@@ -25,5 +25,11 @@ module.exports = {
             accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
             chainId: 8453,
         },
+        hardhat: {
+            forking: {
+                url: 'https://base-mainnet.g.alchemy.com/v2/TRylDDMm2LeRFKSeETLtD',
+                enabled: true,
+            }
+        },
     },
 };

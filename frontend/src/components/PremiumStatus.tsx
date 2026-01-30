@@ -71,8 +71,7 @@ export function PremiumStatus() {
                     address: BASE_USDC_ADDRESS,
                     abi: erc20Abi,
                     functionName: 'approve',
-                    args: [ORACLE_POLL_ADDRESS, cost],
-                    gas: 60000n
+                    args: [ORACLE_POLL_ADDRESS, cost]
                 });
                 await publicClient.waitForTransactionReceipt({ hash });
             }
@@ -83,8 +82,7 @@ export function PremiumStatus() {
                 address: ORACLE_POLL_ADDRESS,
                 abi: ORACLE_POLL_ABI,
                 functionName: 'buyPremium',
-                args: [BigInt(days)],
-                gas: 500000n
+                args: [BigInt(days)]
             });
             // We wait for receipt, but the Event Listener will also handle UI update
             await publicClient.waitForTransactionReceipt({ hash });
