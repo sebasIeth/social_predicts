@@ -4,10 +4,9 @@ import { farcasterMiniApp } from "@farcaster/miniapp-wagmi-connector";
 import { injected, coinbaseWallet } from 'wagmi/connectors';
 
 export const config = createConfig({
-    chains: [base, baseSepolia],
+    chains: [base],
     transports: {
         [base.id]: http(),
-        [baseSepolia.id]: http(),
     },
     connectors: [
         farcasterMiniApp(),

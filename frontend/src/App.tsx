@@ -461,7 +461,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
 
     try {
       console.log("Switching to Base...");
-      await switchChainAsync({ chainId: 8453 });
+      await switchChainAsync({ chainId: 84532 });
 
       if (ethBalance && ethBalance.value === 0n) {
         onError("No Gas", "You need some ETH on Base to pay for gas fees.");
@@ -501,7 +501,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
 
     try {
       console.log("Switching to Base for Vote...");
-      await switchChainAsync({ chainId: 8453 });
+      await switchChainAsync({ chainId: 84532 });
 
       if (needsApproval) {
         onError("Allowance Needed", "Please approve USDC first.");

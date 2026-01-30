@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useEmailAuth } from '@openfort/react';
+import { useEmailAuth, useSignOut } from '@openfort/react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -20,13 +20,38 @@ export function LoginForm({ onForgotPassword, onSuccess }: LoginFormProps) {
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
 
-    // If user is already logged in, redirect immediately
-    useEffect(() => {
-        if (user) {
-            console.log("User detected, redirecting...");
-            onSuccess();
-        }
-    }, [user, onSuccess]);
+    const { signOut } = useSignOut();
+
+    // Remove auto-redirect useEffect to avoid confusion
+    // Instead, if user is present, show a "Continue" or "Logout" prompt
+
+    // ... (rest of simple handlers)
+
+    if (user) {
+        return (
+            <div className="space-y-4 text-center">
+                <div className="bg-green-50 text-green-700 p-4 rounded-2xl mb-4 border border-green-100">
+                    <p className="font-bold text-sm">You are logged in as:</p>
+                    <p className="font-black text-lg">{user.email}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                    <button
+                        onClick={onSuccess}
+                        className="w-full bg-gray-900 text-white font-black py-4 rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all"
+                    >
+                        CONTINUE <ArrowRight className="inline ml-1" size={16} />
+                    </button>
+                    <button
+                        onClick={() => signOut()}
+                        className="w-full bg-white text-gray-500 font-bold py-4 rounded-2xl border-2 border-gray-100 hover:bg-gray-50 hover:text-red-500 transition-all"
+                    >
+                        LOGOUT
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -36,7 +61,6 @@ export function LoginForm({ onForgotPassword, onSuccess }: LoginFormProps) {
             const result = await signInEmail({ email, password });
 
             if (result.error) {
-                // If the error specifically says "Already logged in", treat it as success
                 if (result.error.message?.toLowerCase().includes("already logged in")) {
                     console.log("Caught 'Already logged in' error, redirecting...");
                     onSuccess();
