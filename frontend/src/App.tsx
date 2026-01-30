@@ -1,13 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { OpenfortButton, useSignOut, useUI } from "@openfort/react";
+import { OpenfortButton, useSignOut } from "@openfort/react";
 import { AuthContainer } from './components/auth/AuthContainer';
 import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, X, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, usePublicClient, useSwitchChain, useBalance, useSendTransaction, useWatchContractEvent } from 'wagmi';
-import { injected } from 'wagmi/connectors';
+import { useAccount, useDisconnect, useReadContract, useWriteContract, usePublicClient, useSwitchChain, useBalance, useSendTransaction, useWatchContractEvent } from 'wagmi';
 import { keccak256, encodePacked, stringToHex, formatUnits, type Hex, encodeFunctionData, pad, toHex } from 'viem';
 import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI, BASE_USDC_ADDRESS } from './constants';
 import { erc20Abi } from 'viem';
@@ -30,8 +29,6 @@ const formatTime = (seconds: number) => {
 };
 
 export default function App() {
-  const { open } = useUI();
-
   useEffect(() => {
     sdk.actions.ready();
   }, []);
@@ -40,14 +37,10 @@ export default function App() {
   const [feedbackModal, setFeedbackModal] = useState<{ isOpen: boolean; type: 'success' | 'error'; title: string; message: string } | null>(null);
 
   // Auth State
-  const [isGuest, setIsGuest] = useState(false);
   const [isEmailAuthenticated, setIsEmailAuthenticated] = useState(false);
 
-  const { address, isConnected, connector } = useAccount();
-  const { connect } = useConnect();
+  const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
-
-  const isMiniApp = connector?.id === 'farcaster';
 
   const { data: nextPollId } = useReadContract({
     address: ORACLE_POLL_ADDRESS,
@@ -156,10 +149,9 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      await logout();
+      await signOut();
       disconnect();
       setIsEmailAuthenticated(false);
-      setIsGuest(false);
       alert("Logged out successfully");
     } catch (err) {
       console.error("Logout failed", err);
@@ -174,17 +166,11 @@ export default function App() {
     setFeedbackModal({ isOpen: true, type: 'error', title, message });
   };
 
-  const showApp = isConnected || isGuest || isEmailAuthenticated;
+  const showApp = isConnected || isEmailAuthenticated;
 
   if (!showApp) {
     return (
-      <AuthContainer
-        onSuccess={() => setIsEmailAuthenticated(true)}
-        onGuest={() => {
-          setIsGuest(true);
-          setTimeout(() => open(), 100);
-        }}
-      />
+      <AuthContainer />
     );
   }
 

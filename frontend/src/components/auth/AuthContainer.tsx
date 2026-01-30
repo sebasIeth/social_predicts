@@ -2,13 +2,7 @@ import { motion } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
 import { useUI } from '@openfort/react';
 
-interface AuthContainerProps {
-    onSuccess: () => void;
-    // Guest prop kept for interface compatibility but won't be used visually
-    onGuest: () => void;
-}
-
-export function AuthContainer({ onSuccess, onGuest }: AuthContainerProps) {
+export function AuthContainer() {
     const { open } = useUI();
 
     const handleStart = () => {
