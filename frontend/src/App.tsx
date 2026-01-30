@@ -320,7 +320,12 @@ export default function App() {
         </div>
 
         {/* Floating Bottom Nav */}
-        <nav className="absolute bottom-6 left-6 right-6 p-2 bg-white/90 backdrop-blur-md rounded-[2rem] shadow-[0_20px_40px_-5px_rgba(0,0,0,0.1)] border border-white/50 flex justify-between items-center z-50">
+        <nav className={cn(
+          "bg-white/90 backdrop-blur-md flex justify-between items-center z-50 transition-all",
+          isMiniApp
+            ? "fixed bottom-0 left-0 right-0 px-8 py-5 pb-8 rounded-t-[2.5rem] border-t border-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]"
+            : "absolute bottom-6 left-6 right-6 p-2 rounded-[2rem] shadow-[0_20px_40px_-5px_rgba(0,0,0,0.1)] border border-white/50 bg-white/90"
+        )}>
           <NavButton
             active={activeTab === 'VOTE'}
             onClick={() => setActiveTab('VOTE')}
