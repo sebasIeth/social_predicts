@@ -6,12 +6,7 @@ import pollRoutes from './routes/polls';
 import voteRoutes from './routes/votes';
 import openfortRoutes from './routes/openfort';
 
-const result = dotenv.config({ path: __dirname + '/../.env' });
-if (result.error) {
-    console.log("Dotenv error:", result.error);
-    dotenv.config();
-}
-console.log("Env loaded. Mongo URI:", process.env.MONGODB_URI);
+dotenv.config();
 
 const app = express();
 

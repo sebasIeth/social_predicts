@@ -1,25 +1,20 @@
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, User, LogIn, Ghost } from 'lucide-react';
-import { LoginForm } from './LoginForm';
-import { SignUpForm } from './SignUpForm';
-import { ResetPasswordForm } from './ResetPasswordForm';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-function cn(...inputs: (string | undefined | null | false)[]) {
-    return twMerge(clsx(inputs));
-}
-
-type AuthView = 'LOGIN' | 'SIGNUP' | 'RESET';
+import { motion } from 'framer-motion';
+import { Sparkles } from 'lucide-react';
+import { useUI } from '@openfort/react';
 
 interface AuthContainerProps {
     onSuccess: () => void;
+    // Guest prop kept for interface compatibility but won't be used visually
     onGuest: () => void;
 }
 
 export function AuthContainer({ onSuccess, onGuest }: AuthContainerProps) {
-    const [view, setView] = useState<AuthView>('LOGIN');
+    const { open } = useUI();
+
+    const handleStart = () => {
+        // Trigger the Openfort wallet modal
+        open();
+    };
 
     return (
         <div className="min-h-screen flex items-center justify-center p-4 bg-zinc-200">
@@ -33,13 +28,13 @@ export function AuthContainer({ onSuccess, onGuest }: AuthContainerProps) {
                 <div className="absolute top-0 left-0 w-full h-48 bg-candy-purple/10 -skew-y-6 origin-top-left translate-y-[-20%]" />
                 <div className="absolute top-0 right-0 w-32 h-32 bg-candy-yellow/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
 
-                <div className="relative px-8 pt-12 pb-8">
+                <div className="relative px-8 pt-12 pb-12">
                     {/* Header */}
-                    <div className="text-center mb-8">
-                        <div className="w-16 h-16 bg-candy-purple rounded-2xl rotate-3 flex items-center justify-center shadow-lg mx-auto mb-4">
-                            <Sparkles className="text-white w-8 h-8" />
+                    <div className="text-center mb-10">
+                        <div className="w-20 h-20 bg-candy-purple rounded-3xl rotate-3 flex items-center justify-center shadow-xl shadow-candy-purple/20 mx-auto mb-6">
+                            <Sparkles className="text-white w-10 h-10" />
                         </div>
-                        <h1 className="text-3xl font-display font-black text-gray-800 tracking-tight mb-1">
+                        <h1 className="text-4xl font-display font-black text-gray-800 tracking-tight mb-2">
                             Social Predicts
                         </h1>
                         <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">
@@ -47,101 +42,15 @@ export function AuthContainer({ onSuccess, onGuest }: AuthContainerProps) {
                         </p>
                     </div>
 
-                    <AnimatePresence mode="wait">
-                        {view === 'LOGIN' && (
-                            <motion.div
-                                key="login"
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: 20 }}
-                            >
-                                <div className="flex bg-gray-100 p-1 rounded-2xl mb-6">
-                                    <button
-                                        onClick={() => setView('LOGIN')}
-                                        className="flex-1 py-3 rounded-xl text-sm font-black transition-all bg-white text-gray-800 shadow-sm"
-                                    >
-                                        LOGIN
-                                    </button>
-                                    <button
-                                        onClick={() => setView('SIGNUP')}
-                                        className="flex-1 py-3 rounded-xl text-sm font-bold text-gray-400 hover:text-gray-600 transition-all"
-                                    >
-                                        SIGN UP
-                                    </button>
-                                </div>
-
-                                <div className="mb-6">
-                                    <h2 className="text-xl font-display font-bold text-gray-800 mb-4">Welcome Back!</h2>
-                                    <LoginForm
-                                        onForgotPassword={() => setView('RESET')}
-                                        onSuccess={onSuccess}
-                                    />
-                                </div>
-                            </motion.div>
-                        )}
-
-                        {view === 'SIGNUP' && (
-                            <motion.div
-                                key="signup"
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                            >
-                                <div className="flex bg-gray-100 p-1 rounded-2xl mb-6">
-                                    <button
-                                        onClick={() => setView('LOGIN')}
-                                        className="flex-1 py-3 rounded-xl text-sm font-bold text-gray-400 hover:text-gray-600 transition-all"
-                                    >
-                                        LOGIN
-                                    </button>
-                                    <button
-                                        onClick={() => setView('SIGNUP')}
-                                        className="flex-1 py-3 rounded-xl text-sm font-black transition-all bg-white text-gray-800 shadow-sm"
-                                    >
-                                        SIGN UP
-                                    </button>
-                                </div>
-
-                                <div className="mb-6">
-                                    <h2 className="text-xl font-display font-bold text-gray-800 mb-4">Create Account</h2>
-                                    <SignUpForm onSuccess={onSuccess} />
-                                </div>
-                            </motion.div>
-                        )}
-
-                        {view === 'RESET' && (
-                            <motion.div
-                                key="reset"
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                            >
-                                <ResetPasswordForm
-                                    onBack={() => setView('LOGIN')}
-                                    onSuccess={() => setView('LOGIN')}
-                                />
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-
-                    {/* Guest Login Divider */}
-                    {view !== 'RESET' && (
-                        <>
-                            <div className="relative flex py-5 items-center">
-                                <div className="flex-grow border-t-2 border-gray-100"></div>
-                                <span className="flex-shrink-0 mx-4 text-xs font-bold text-gray-300 uppercase">Or continue with</span>
-                                <div className="flex-grow border-t-2 border-gray-100"></div>
-                            </div>
-
-                            <button
-                                onClick={onGuest}
-                                className="w-full py-4 border-2 border-gray-200 text-gray-500 font-bold rounded-2xl hover:bg-gray-50 hover:text-gray-800 hover:border-gray-300 transition-all flex items-center justify-center gap-2"
-                            >
-                                <Ghost size={20} />
-                                CONTINUE AS GUEST
-                            </button>
-                        </>
-                    )}
+                    <div className="flex flex-col items-center gap-6">
+                        <button
+                            onClick={handleStart}
+                            className="w-full py-5 text-xl bg-gray-900 text-white font-black rounded-3xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 relative overflow-hidden group"
+                        >
+                            <span className="relative z-10">START</span>
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+                        </button>
+                    </div>
                 </div>
             </motion.div>
         </div>

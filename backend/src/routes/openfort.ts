@@ -3,7 +3,6 @@ import { Openfort } from "@openfort/openfort-node";
 
 const router = express.Router();
 
-// Initialize Openfort client
 const openfort = new Openfort(process.env.OPENFORT_SECRET_KEY!);
 
 router.post("/create-session", async (req, res) => {

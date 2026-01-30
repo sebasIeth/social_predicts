@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { OpenfortButton, useSignOut } from "@openfort/react";
+import { OpenfortButton, useSignOut, useUI } from "@openfort/react";
 import { AuthContainer } from './components/auth/AuthContainer';
 import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, X, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -30,6 +30,8 @@ const formatTime = (seconds: number) => {
 };
 
 export default function App() {
+  const { open } = useUI();
+
   useEffect(() => {
     sdk.actions.ready();
   }, []);
@@ -70,7 +72,7 @@ export default function App() {
     abi: ORACLE_POLL_ABI,
     eventName: 'VoteCommitted',
     onLogs() {
-      console.log('Vote committed! Refetching poll data...');
+
       refetchPoll();
     },
   });
@@ -178,7 +180,10 @@ export default function App() {
     return (
       <AuthContainer
         onSuccess={() => setIsEmailAuthenticated(true)}
-        onGuest={() => setIsGuest(true)}
+        onGuest={() => {
+          setIsGuest(true);
+          setTimeout(() => open(), 100);
+        }}
       />
     );
   }
@@ -460,7 +465,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
     if (!address || !publicClient) return;
 
     try {
-      console.log("Switching to Base...");
+
       await switchChainAsync({ chainId: 84532 });
 
       if (ethBalance && ethBalance.value === 0n) {
@@ -469,7 +474,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
       }
 
       setIsApproving(true);
-      console.log("Initiating Approval...");
+
 
       const encoded = encodeFunctionData({
         abi: erc20Abi,
@@ -483,7 +488,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
         gas: 100000n,
       });
 
-      console.log("Approval Hash Sent:", hash);
+
       await publicClient.waitForTransactionReceipt({ hash });
       await refetchAllowance();
       setIsApproving(false);
@@ -500,7 +505,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
     if (selected === null || !address || !publicClient) return;
 
     try {
-      console.log("Switching to Base for Vote...");
+
       await switchChainAsync({ chainId: 84532 });
 
       if (needsApproval) {
@@ -518,7 +523,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
       const salt = pad(toHex(Math.floor(Math.random() * 1000000)), { size: 32 });
       const voteHash = keccak256(encodePacked(['uint256', 'bytes32'], [BigInt(selected), salt]));
 
-      console.log("Sending commitVote to Poll:", pollId, "Hash:", voteHash);
+
 
       const encoded = encodeFunctionData({
         abi: ORACLE_POLL_ABI,
@@ -526,9 +531,9 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
         args: [BigInt(pollId), voteHash as `0x${string}`]
       });
 
-      console.log("Fetching current fees from Base...");
+
       const estimate = await publicClient.estimateFeesPerGas();
-      console.log("Base Fees:", estimate);
+
 
       const hash = await sendTransactionAsync({
         to: ORACLE_POLL_ADDRESS as `0x${string}`,
@@ -540,7 +545,7 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
         value: 0n,
       });
 
-      console.log("Tx Sent successfully:", hash);
+
       await publicClient.waitForTransactionReceipt({ hash });
 
       const resCount = await fetch(`http://127.0.0.1:5001/api/votes/user/${address}`);
