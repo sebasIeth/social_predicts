@@ -219,58 +219,59 @@ export default function App() {
             <main className="px-4 space-y-4">
 
               {/* Hero Card: The Question */}
-              <motion.div
-                layout
-                className="bg-white rounded-[2.5rem] p-8 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] border-b-8 border-gray-100 relative overflow-hidden"
-              >
-                <div className="absolute top-0 right-0 w-32 h-32 bg-candy-yellow/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
+              {activeTab !== 'LEADERBOARD' && activeTab !== 'PROFILE' && (
+                <motion.div
+                  layout
+                  className="bg-white rounded-[2.5rem] p-8 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] border-b-8 border-gray-100 relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-candy-yellow/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
 
-                <div className="flex items-center gap-2 mb-4">
-                  <span className={cn(
-                    "px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider",
-                    phase === 'COMMIT' ? "bg-candy-mint/20 text-candy-mint" :
-                      phase === 'REVEAL' ? "bg-candy-yellow/20 text-yellow-600" :
-                        "bg-gray-100 text-gray-400"
-                  )}>
-                    {phase} PHASE
-                  </span>
-                  <span className="text-xs font-bold text-gray-400">
-                    {pollData && phase === 'COMMIT' && `Ends in ${formatTime(Number(pollData[2]) - now)}`}
-                    {pollData && phase === 'REVEAL' && `Ends in ${formatTime(Number(pollData[3]) - now)}`}
-                  </span>
-                </div>
-
-                <h2 className="text-3xl font-display font-bold leading-tight mb-6 text-gray-800">
-                  {pollData ? pollData[1] : "Loading Poll..."}
-                </h2>
-
-                {/* Stake Info */}
-                {/* Stake Info */}
-                <div className="flex flex-col items-start gap-3 mb-8">
-                  <div className="px-3 py-1 bg-gray-50 rounded-lg text-xs font-bold text-gray-500">
-                    Total Stake: {pollData ? formatUnits(pollData[4], 6) : '0'} USDC
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className={cn(
+                      "px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider",
+                      phase === 'COMMIT' ? "bg-candy-mint/20 text-candy-mint" :
+                        phase === 'REVEAL' ? "bg-candy-yellow/20 text-yellow-600" :
+                          "bg-gray-100 text-gray-400"
+                    )}>
+                      {phase} PHASE
+                    </span>
+                    <span className="text-xs font-bold text-gray-400">
+                      {pollData && phase === 'COMMIT' && `Ends in ${formatTime(Number(pollData[2]) - now)}`}
+                      {pollData && phase === 'REVEAL' && `Ends in ${formatTime(Number(pollData[3]) - now)}`}
+                    </span>
                   </div>
 
-                  {pollData && Number(pollData[4]) > 0 && (
-                    <div className="flex items-center gap-2">
-                      <div className="flex -space-x-3">
-                        {[1, 2, 3].map((i) => (
-                          <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-gray-100 overflow-hidden">
-                            <img
-                              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${(Number(pollData[4]) + i) * 123}`}
-                              alt="Voter"
-                              className="w-full h-full"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                      <span className="text-xs font-bold text-gray-500">
-                        +{(Number(pollData[4]) / 1000).toString()} Voters
-                      </span>
+                  <h2 className="text-3xl font-display font-bold leading-tight mb-6 text-gray-800">
+                    {pollData ? pollData[1] : "Loading Poll..."}
+                  </h2>
+
+                  {/* Stake Info */}
+                  <div className="flex flex-col items-start gap-3 mb-8">
+                    <div className="px-3 py-1 bg-gray-50 rounded-lg text-xs font-bold text-gray-500">
+                      Total Stake: {pollData ? formatUnits(pollData[4], 6) : '0'} USDC
                     </div>
-                  )}
-                </div>
-              </motion.div>
+
+                    {pollData && Number(pollData[4]) > 0 && (
+                      <div className="flex items-center gap-2">
+                        <div className="flex -space-x-3">
+                          {[1, 2, 3].map((i) => (
+                            <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-gray-100 overflow-hidden">
+                              <img
+                                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${(Number(pollData[4]) + i) * 123}`}
+                                alt="Voter"
+                                className="w-full h-full"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <span className="text-xs font-bold text-gray-500">
+                          +{(Number(pollData[4]) / 1000).toString()} Voters
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
 
               {/* Action Area */}
               <AnimatePresence mode="wait">
@@ -1367,16 +1368,24 @@ function NavButton({ active, onClick, icon, label, color }: any) {
   );
 }
 
+
 function LeaderboardView() {
-  const [leaders, setLeaders] = useState<any[]>([]);
+  const { address } = useAccount();
+  const [data, setData] = useState<{ leaderboard: any[], userRank: any | null }>({ leaderboard: [], userRank: null });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/leaderboard`);
-        const data = await res.json();
-        setLeaders(data);
+        const query = address ? `?address=${address}` : '';
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/leaderboard${query}`);
+        const result = await res.json();
+        // Handle both old array format (fallback) and new object format
+        if (Array.isArray(result)) {
+          setData({ leaderboard: result, userRank: null });
+        } else {
+          setData(result);
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -1384,7 +1393,7 @@ function LeaderboardView() {
       }
     };
     fetchLeaderboard();
-  }, []);
+  }, [address]);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-64 space-y-4">
@@ -1398,58 +1407,97 @@ function LeaderboardView() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className="space-y-4"
+      className="space-y-4 relative pb-20"
     >
       <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-[2rem] p-8 text-white shadow-lg mb-6">
         <h2 className="text-3xl font-display font-black mb-2">Leaderboard 🏆</h2>
-        <p className="text-purple-100 font-medium opacity-80">Top predictors based on wins</p>
+        <p className="text-purple-100 font-medium opacity-80">Top 10 Predictors</p>
       </div>
 
       <div className="space-y-3">
-        {leaders.map((user, index) => (
-          <div key={user.address} className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className={cn(
-                "w-10 h-10 rounded-full flex items-center justify-center font-black text-sm border-2",
-                index === 0 ? "bg-yellow-100 text-yellow-600 border-yellow-200" :
-                  index === 1 ? "bg-gray-100 text-gray-500 border-gray-200" :
-                    index === 2 ? "bg-orange-100 text-orange-600 border-orange-200" :
-                      "bg-blue-50 text-blue-500 border-blue-100"
-              )}>
-                #{index + 1}
-              </div>
-              <div>
-                <p className="font-bold text-gray-800 text-sm">
-                  {user.address.slice(0, 6)}...{user.address.slice(-4)}
-                  {index === 0 && " 👑"}
-                </p>
-                <p className="text-xs text-gray-400 font-medium">
-                  {user.gamesPlayed} games played
-                </p>
-              </div>
-            </div>
-
-            <div className="text-right">
-              <p className="font-black text-gray-800 text-lg">{user.gamesWon} Wins</p>
-              <div className="flex items-center justify-end space-x-1">
-                <span className={cn(
-                  "text-xs font-bold px-2 py-0.5 rounded-full",
-                  parseFloat(user.winRate) >= 50 ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-500"
-                )}>
-                  {user.winRate}% WR
-                </span>
-              </div>
-            </div>
-          </div>
+        {data.leaderboard.map((user, index) => (
+          <LeaderboardRow key={user.address} user={user} index={index} />
         ))}
 
-        {leaders.length === 0 && (
+        {data.leaderboard.length === 0 && (
           <div className="text-center py-12 text-gray-400">
             <Trophy size={48} className="mx-auto mb-3 opacity-20" />
             <p>No winners yet. Be the first!</p>
           </div>
         )}
       </div>
+
+      {/* Sticky User Rank (if not in top 10) */}
+      {data.userRank && (
+        <div className="fixed bottom-24 left-0 right-0 px-6 z-40">
+          <div className="bg-gray-900 p-4 rounded-3xl shadow-2xl border border-gray-700 flex items-center justify-between transform scale-105">
+            <div className="flex items-center space-x-4">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center font-black text-sm border-2 bg-gray-800 text-white border-gray-600">
+                #{data.userRank.rank}
+              </div>
+              <div>
+                <p className="font-bold text-white text-sm">
+                  You
+                </p>
+                <p className="text-xs text-gray-400 font-medium">
+                  {data.userRank.gamesPlayed} games played
+                </p>
+              </div>
+            </div>
+
+            <div className="text-right">
+              <p className="font-black text-white text-lg">{data.userRank.gamesWon} Wins</p>
+              <div className="flex items-center justify-end space-x-1">
+                <span className={cn(
+                  "text-xs font-bold px-2 py-0.5 rounded-full",
+                  parseFloat(data.userRank.winRate) >= 50 ? "bg-green-900 text-green-300" : "bg-gray-700 text-gray-300"
+                )}>
+                  {data.userRank.winRate}% WR
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
+}
+
+function LeaderboardRow({ user, index }: { user: any, index: number }) {
+  return (
+    <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between">
+      <div className="flex items-center space-x-4">
+        <div className={cn(
+          "w-10 h-10 rounded-full flex items-center justify-center font-black text-sm border-2",
+          index === 0 ? "bg-yellow-100 text-yellow-600 border-yellow-200" :
+            index === 1 ? "bg-gray-100 text-gray-500 border-gray-200" :
+              index === 2 ? "bg-orange-100 text-orange-600 border-orange-200" :
+                "bg-blue-50 text-blue-500 border-blue-100"
+        )}>
+          #{index + 1}
+        </div>
+        <div>
+          <p className="font-bold text-gray-800 text-sm">
+            {user.address.slice(0, 6)}...{user.address.slice(-4)}
+            {index === 0 && " 👑"}
+          </p>
+          <p className="text-xs text-gray-400 font-medium">
+            {user.gamesPlayed} games played
+          </p>
+        </div>
+      </div>
+
+      <div className="text-right">
+        <p className="font-black text-gray-800 text-lg">{user.gamesWon} Wins</p>
+        <div className="flex items-center justify-end space-x-1">
+          <span className={cn(
+            "text-xs font-bold px-2 py-0.5 rounded-full",
+            parseFloat(user.winRate) >= 50 ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-500"
+          )}>
+            {user.winRate}% WR
+          </span>
+        </div>
+      </div>
+    </div>
+  )
 }
