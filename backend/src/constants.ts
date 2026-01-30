@@ -1,6 +1,4 @@
-export const ORACLE_POLL_ADDRESS = "0xf99E3270ACB63341eCdD550004DEdF1A6268A234";
-export const BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-
+export const ORACLE_POLL_ADDRESS = "0xf99E3270ACB63341eCdD550004DEdF1A6268A234"; // User needs to update this traverse deployment
 export const ORACLE_POLL_ABI = [
     {
         "inputs": [
@@ -596,5 +594,47 @@ export const ORACLE_POLL_ABI = [
         ],
         "stateMutability": "view",
         "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_pollId",
+                "type": "uint256"
+            },
+            {
+                "internalType": "address",
+                "name": "_voter",
+                "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_commitmentIndex",
+                "type": "uint256"
+            }
+        ],
+        "name": "hasRevealed",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_pollId",
+                "type": "uint256"
+            }
+        ],
+        "name": "resolvePoll",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
     }
-] as const;
+];

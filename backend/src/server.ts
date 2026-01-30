@@ -5,6 +5,7 @@ import connectDB from './config/db';
 import pollRoutes from './routes/polls';
 import voteRoutes from './routes/votes';
 import userRoutes from './routes/users';
+import { AutoPilotService } from './services/AutoPilot';
 
 dotenv.config();
 
@@ -26,4 +27,8 @@ const PORT = process.env.PORT || 5001;
 
 app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
+
+    // Start Auto-Pilot
+    const autoPilot = new AutoPilotService();
+    autoPilot.start();
 });

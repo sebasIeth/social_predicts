@@ -7,6 +7,8 @@ export interface IVote extends Document {
     commitmentIndex: number;
     salt: string;
     timestamp: Date;
+    revealed?: boolean;
+    rewardClaimed?: boolean;
 }
 
 const VoteSchema: Schema = new Schema({
@@ -16,6 +18,8 @@ const VoteSchema: Schema = new Schema({
     commitmentIndex: { type: Number, required: true },
     salt: { type: String, required: true },
     timestamp: { type: Date, default: Date.now },
+    revealed: { type: Boolean, default: false }, // Track if revealed on-chain
+    rewardClaimed: { type: Boolean, default: false } // Track if reward claimed
 });
 
 // Multiple votes per address allowed

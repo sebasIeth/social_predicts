@@ -9,6 +9,7 @@ import { injected } from 'wagmi/connectors';
 import { keccak256, encodePacked, formatUnits, type Hex, pad, toHex } from 'viem';
 import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI, BASE_USDC_ADDRESS } from './constants';
 import { erc20Abi } from 'viem';
+import { PremiumStatus } from './components/PremiumStatus';
 
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
@@ -184,31 +185,35 @@ export default function App() {
                 </div>
               </div>
 
-              {!isConnected ? (
-                <button
-                  onClick={() => connect({ connector: injected() })}
-                  className="px-4 py-2 bg-black text-white rounded-2xl text-xs font-bold hover:scale-95 transition-transform flex items-center gap-2"
-                >
-                  <Wallet size={14} /> Connect
-                </button>
-              ) : (
-                <button
-                  onClick={() => !isMiniApp && disconnect()}
-                  disabled={isMiniApp}
-                  className={cn(
-                    "px-4 py-2 bg-white border-2 border-gray-100 rounded-2xl text-xs font-bold text-gray-500 transition-colors",
-                    !isMiniApp ? "hover:bg-gray-50 cursor-pointer" : "cursor-default"
-                  )}
-                >
-                  {address?.slice(0, 6)}...{address?.slice(-4)}
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+
+
+                {!isConnected ? (
+                  <button
+                    onClick={() => connect({ connector: injected() })}
+                    className="px-4 py-2 bg-black text-white rounded-2xl text-xs font-bold hover:scale-95 transition-transform flex items-center gap-2"
+                  >
+                    <Wallet size={14} /> Connect
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => !isMiniApp && disconnect()}
+                    disabled={isMiniApp}
+                    className={cn(
+                      "px-4 py-2 bg-white border-2 border-gray-100 rounded-2xl text-xs font-bold text-gray-500 transition-colors",
+                      !isMiniApp ? "hover:bg-gray-50 cursor-pointer" : "cursor-default"
+                    )}
+                  >
+                    {address?.slice(0, 6)}...{address?.slice(-4)}
+                  </button>
+                )}
+              </div>
 
               {/* Debug: Create Poll Button (Dev Only) */}
               {import.meta.env.DEV && isConnected && (
                 <button
                   onClick={handleCreatePoll}
-                  className="px-3 py-2 bg-red-500 text-white rounded-xl text-xs font-bold hover:bg-red-600 ml-2"
+                  className="px-3 py-2 bg-red-500 text-white rounded-xl text-xs font-bold hover:bg-red-600 ml-2 hidden md:block"
                 >
                   + Poll
                 </button>
@@ -430,6 +435,15 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
     } catch (e) { console.error(e) }
   };
 
+  // Check if Premium
+  const { data: isPremium } = useReadContract({
+    address: ORACLE_POLL_ADDRESS,
+    abi: ORACLE_POLL_ABI,
+    functionName: 'isPremium',
+    args: [address!],
+    query: { enabled: !!address }
+  });
+
   useEffect(() => {
     fetchUserVotes();
   }, [address, pollId]);
@@ -560,7 +574,11 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
       }).catch(console.error);
 
       setIsCommitting(false);
-      onSuccess("Vote Committed!", "Your prediction is locked in. Don't forget to come back and reveal it later!");
+      if (isPremium) {
+        onSuccess("Vote Locked! 🔒", "Since you're a PRO member, we'll auto-reveal this for you! Sit back and relax.");
+      } else {
+        onSuccess("Vote Committed!", "Your prediction is locked in. Don't forget to come back and reveal it later!");
+      }
       refetchBalance();
       refetchAllowance();
       fetchUserVotes();
@@ -709,11 +727,21 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
         )}
 
         {hasVoted && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-candy-mint/10 rounded-full border border-candy-mint/20">
-            <CheckCircle size={14} className="text-candy-mint" />
-            <span className="text-xs font-black text-candy-mint uppercase">
-              You Have {userVotes} {userVotes === 1 ? 'Vote' : 'Votes'} in This Poll
-            </span>
+          <div className="flex flex-col items-center gap-2">
+            <div className="flex items-center gap-2 px-4 py-2 bg-candy-mint/10 rounded-full border border-candy-mint/20">
+              <CheckCircle size={14} className="text-candy-mint" />
+              <span className="text-xs font-black text-candy-mint uppercase">
+                You Have {userVotes} {userVotes === 1 ? 'Vote' : 'Votes'} in This Poll
+              </span>
+            </div>
+            {isPremium && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-yellow-50 rounded-full border border-yellow-200">
+                <Sparkles size={12} className="text-yellow-600" />
+                <span className="text-[10px] font-bold text-yellow-700 uppercase">
+                  Auto-Pilot Active
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1263,7 +1291,19 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
   const totalWon = history.length * 0.001; // Mock calculation based on stake
 
   return (
-    <div className="space-y-6">
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      className="space-y-6"
+    >
+      <div className="flex items-center justify-between px-2">
+        <div>
+          <h2 className="text-2xl font-display font-black text-gray-800">Your Profile</h2>
+          <p className="text-gray-400 font-bold text-xs uppercase tracking-wider">Stats & History</p>
+        </div>
+        <PremiumStatus />
+      </div>
       {/* Stats Card */}
       <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-gray-100 grid grid-cols-2 gap-4">
         <div className="text-center">
@@ -1363,7 +1403,7 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
           );
         })}
       </div>
-    </div>
+    </motion.div>
   );
 }
 

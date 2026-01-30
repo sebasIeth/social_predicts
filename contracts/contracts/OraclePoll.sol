@@ -38,12 +38,30 @@ contract OraclePoll {
     event VoteCommitted(uint256 indexed pollId, address indexed voter);
     event VoteRevealed(uint256 indexed pollId, address indexed voter, uint256 optionIndex);
     event PollResolved(uint256 indexed pollId, uint256 winningOptionIndex, uint256 totalStake, uint256 winnerCount);
+    event PremiumPurchased(address indexed user);
+
+    mapping(address => bool) public isPremium;
+    uint256 public constant MEMBERSHIP_COST = 100; // 0.0001 USDC (6 decimals)
+    address public admin;
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Not admin");
+        _;
+    }
 
     constructor(address _usdToken) {
         usdToken = IERC20(_usdToken);
+        admin = msg.sender;
+    }
+
+    function buyPremium() external {
+        usdToken.safeTransferFrom(msg.sender, admin, MEMBERSHIP_COST);
+        isPremium[msg.sender] = true;
+        emit PremiumPurchased(msg.sender);
     }
 
     function createPoll(string memory _question, string[] memory _options, uint256 _commitDuration, uint256 _revealDuration) external {
+        require(isPremium[msg.sender], "Only premium users can create polls");
         uint256 pollId = nextPollId++;
         Poll storage p = polls[pollId];
         p.id = pollId;
@@ -126,6 +144,44 @@ contract OraclePoll {
 
         rewardClaimed[_pollId][msg.sender][_commitmentIndex] = true;
         usdToken.safeTransfer(msg.sender, reward);
+    }
+
+    // --- Admin Auto-Pilot Functions ---
+
+    function adminRevealVote(uint256 _pollId, address _voter, uint256 _commitmentIndex, uint256 _optionIndex, bytes32 _salt) external onlyAdmin {
+        require(isPremium[_voter], "User is not premium");
+        
+        Poll storage p = polls[_pollId];
+        require(block.timestamp >= p.commitEndTime, "Commit phase not ended");
+        require(block.timestamp < p.revealEndTime, "Reveal phase ended");
+        require(commitments[_pollId][_voter].length > _commitmentIndex, "Invalid commitment index");
+        require(votes[_pollId][_voter][_commitmentIndex] == 0, "Already revealed");
+        require(p.options.length > _optionIndex, "Invalid option index");
+
+        bytes32 verifyHash = keccak256(abi.encodePacked(_optionIndex, _salt));
+        require(verifyHash == commitments[_pollId][_voter][_commitmentIndex], "Hash mismatch");
+
+        votes[_pollId][_voter][_commitmentIndex] = _optionIndex + 1; 
+        optionTallies[_pollId][_optionIndex]++;
+        
+        emit VoteRevealed(_pollId, _voter, _optionIndex);
+    }
+
+    function adminClaimReward(uint256 _pollId, address _voter, uint256 _commitmentIndex) external onlyAdmin {
+        require(isPremium[_voter], "User is not premium");
+
+        Poll storage p = polls[_pollId];
+        require(p.resolved, "Poll not resolved");
+        require(votes[_pollId][_voter][_commitmentIndex] == p.winningOptionIndex + 1, "User did not win");
+        require(!rewardClaimed[_pollId][_voter][_commitmentIndex], "Already claimed");
+
+        uint256 winnerCount = optionTallies[_pollId][p.winningOptionIndex];
+        require(winnerCount > 0, "No winners? Error.");
+        
+        uint256 reward = p.totalStake / winnerCount;
+
+        rewardClaimed[_pollId][_voter][_commitmentIndex] = true;
+        usdToken.safeTransfer(_voter, reward);
     }
     
     function getPollOptions(uint256 _pollId) external view returns (string[] memory) {
