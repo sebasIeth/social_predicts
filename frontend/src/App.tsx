@@ -591,6 +591,17 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
     refetchTallies();
   }, [pollId, refetchTallies]); // or trigger on prop change if passed
 
+  // Real-time listener for new votes being revealed
+  useWatchContractEvent({
+    address: ORACLE_POLL_ADDRESS,
+    abi: ORACLE_POLL_ABI,
+    eventName: 'VoteRevealed',
+    onLogs() {
+      console.log('Vote revealed (real-time)! Refetching tallies...');
+      refetchTallies();
+    },
+  });
+
   // Calculate totals
   const totalRevealedStake = tallies?.reduce((acc, t) => acc + (t.result ? BigInt(t.result as any) : 0n), 0n) || 0n;
 
