@@ -409,7 +409,8 @@ function FeedbackModal({ type, title, message, onClose }: { type: 'success' | 'e
 
 function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSuccess }: { pollId: number, options: readonly string[], enabled: boolean, onSuccess: (t: string, m: string) => void, onError: (t: string, m: string) => void, onVoteSuccess?: () => void }) {
   const [selected, setSelected] = useState<number | null>(null);
-  const { address } = useAccount();
+  const { address, connector } = useAccount();
+  const isMiniApp = connector?.id === 'farcaster';
   useSwitchChain();
   const [isApproving, setIsApproving] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
@@ -467,7 +468,9 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
 
     try {
       console.log("Switching to Base...");
-      await switchChainAsync({ chainId: 8453 });
+      if (!isMiniApp) {
+        await switchChainAsync({ chainId: 8453 });
+      }
 
       if (ethBalance && ethBalance.value === 0n) {
         onError("No Gas", "You need some ETH on Base to pay for gas fees.");
@@ -502,7 +505,9 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
 
     try {
       console.log("Switching to Base for Vote...");
-      await switchChainAsync({ chainId: 8453 });
+      if (!isMiniApp) {
+        await switchChainAsync({ chainId: 8453 });
+      }
 
       if (needsApproval) {
         onError("Allowance Needed", "Please approve USDC first.");
