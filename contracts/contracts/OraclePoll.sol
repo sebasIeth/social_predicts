@@ -38,10 +38,11 @@ contract OraclePoll {
     event VoteCommitted(uint256 indexed pollId, address indexed voter);
     event VoteRevealed(uint256 indexed pollId, address indexed voter, uint256 optionIndex);
     event PollResolved(uint256 indexed pollId, uint256 winningOptionIndex, uint256 totalStake, uint256 winnerCount);
-    event PremiumPurchased(address indexed user);
+    event PremiumPurchased(address indexed user, uint256 expiryTimestamp);
 
-    mapping(address => bool) public isPremium;
-    uint256 public constant MEMBERSHIP_COST = 100; // 0.0001 USDC (6 decimals)
+    mapping(address => uint256) public premiumExpiry;
+    uint256 public constant COST_7_DAYS = 100;   // 0.0001 USDC
+    uint256 public constant COST_30_DAYS = 300;  // 0.0003 USDC
     address public admin;
 
     modifier onlyAdmin() {
@@ -49,19 +50,39 @@ contract OraclePoll {
         _;
     }
 
+    function isPremium(address _user) public view returns (bool) {
+        return premiumExpiry[_user] > block.timestamp;
+    }
+
     constructor(address _usdToken) {
         usdToken = IERC20(_usdToken);
         admin = msg.sender;
     }
 
-    function buyPremium() external {
-        usdToken.safeTransferFrom(msg.sender, admin, MEMBERSHIP_COST);
-        isPremium[msg.sender] = true;
-        emit PremiumPurchased(msg.sender);
+    function buyPremium(uint256 _days) external {
+        uint256 cost;
+        if (_days == 7) {
+            cost = COST_7_DAYS;
+        } else if (_days == 30) {
+            cost = COST_30_DAYS;
+        } else {
+            revert("Invalid duration: Use 7 or 30");
+        }
+
+        usdToken.safeTransferFrom(msg.sender, admin, cost);
+        
+        // Extend if active, otherwise start from now
+        if (premiumExpiry[msg.sender] > block.timestamp) {
+            premiumExpiry[msg.sender] += (_days * 1 days);
+        } else {
+            premiumExpiry[msg.sender] = block.timestamp + (_days * 1 days);
+        }
+        
+        emit PremiumPurchased(msg.sender, premiumExpiry[msg.sender]);
     }
 
     function createPoll(string memory _question, string[] memory _options, uint256 _commitDuration, uint256 _revealDuration) external {
-        require(isPremium[msg.sender], "Only premium users can create polls");
+        require(isPremium(msg.sender), "Only premium users can create polls");
         uint256 pollId = nextPollId++;
         Poll storage p = polls[pollId];
         p.id = pollId;
@@ -149,7 +170,7 @@ contract OraclePoll {
     // --- Admin Auto-Pilot Functions ---
 
     function adminRevealVote(uint256 _pollId, address _voter, uint256 _commitmentIndex, uint256 _optionIndex, bytes32 _salt) external onlyAdmin {
-        require(isPremium[_voter], "User is not premium");
+        require(isPremium(_voter), "User is not premium");
         
         Poll storage p = polls[_pollId];
         require(block.timestamp >= p.commitEndTime, "Commit phase not ended");
@@ -168,7 +189,7 @@ contract OraclePoll {
     }
 
     function adminClaimReward(uint256 _pollId, address _voter, uint256 _commitmentIndex) external onlyAdmin {
-        require(isPremium[_voter], "User is not premium");
+        require(isPremium(_voter), "User is not premium");
 
         Poll storage p = polls[_pollId];
         require(p.resolved, "Poll not resolved");

@@ -1,4 +1,4 @@
-export const ORACLE_POLL_ADDRESS = "0xf99E3270ACB63341eCdD550004DEdF1A6268A234";
+export const ORACLE_POLL_ADDRESS = "0xCf9334fCD39d87df96420F18E6Fe117B81170e84";
 export const BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
 export const ORACLE_POLL_ABI = [
@@ -88,6 +88,12 @@ export const ORACLE_POLL_ABI = [
                 "internalType": "address",
                 "name": "user",
                 "type": "address"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "expiryTimestamp",
+                "type": "uint256"
             }
         ],
         "name": "PremiumPurchased",
@@ -139,7 +145,20 @@ export const ORACLE_POLL_ABI = [
     },
     {
         "inputs": [],
-        "name": "MEMBERSHIP_COST",
+        "name": "COST_30_DAYS",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "COST_7_DAYS",
         "outputs": [
             {
                 "internalType": "uint256",
@@ -233,7 +252,13 @@ export const ORACLE_POLL_ABI = [
         "type": "function"
     },
     {
-        "inputs": [],
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_days",
+                "type": "uint256"
+            }
+        ],
         "name": "buyPremium",
         "outputs": [],
         "stateMutability": "nonpayable",
@@ -384,7 +409,7 @@ export const ORACLE_POLL_ABI = [
         "inputs": [
             {
                 "internalType": "address",
-                "name": "",
+                "name": "_user",
                 "type": "address"
             }
         ],
@@ -488,6 +513,25 @@ export const ORACLE_POLL_ABI = [
     {
         "inputs": [
             {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "premiumExpiry",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
                 "internalType": "uint256",
                 "name": "_pollId",
                 "type": "uint256"
@@ -560,7 +604,7 @@ export const ORACLE_POLL_ABI = [
         "name": "usdToken",
         "outputs": [
             {
-                "internalType": "address",
+                "internalType": "contract IERC20",
                 "name": "",
                 "type": "address"
             }

@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "/Users/sebastianramirezgarcua/x4llet/social-market/contracts/contracts/OraclePoll.sol": {
-      "lastModificationDate": 1769787100919,
-      "contentHash": "0bec5ff4872c77ba92aa890e606db85e",
+      "lastModificationDate": 1769803075620,
+      "contentHash": "c5ed925abcfd88d0c6742e1cc795c0f2",
       "sourceName": "contracts/OraclePoll.sol",
       "solcConfig": {
         "version": "0.8.24",
