@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { sdk } from '@farcaster/miniapp-sdk';
+import { OpenfortButton, useSignOut, useUser } from "@openfort/react";
+import { AuthContainer } from './components/auth/AuthContainer';
 import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, X, AlertCircle, Gavel, Eye, EyeOff } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -29,7 +31,7 @@ const formatTime = (seconds: number) => {
   return `${s}s`;
 };
 
-export default function App() {
+function Dashboard() {
   useEffect(() => {
     sdk.actions.ready();
   }, []);
@@ -40,8 +42,18 @@ export default function App() {
   const { address, isConnected, connector } = useAccount();
   const { connect } = useConnect();
   const { disconnect } = useDisconnect();
+  const { signOut } = useSignOut();
+
 
   const isMiniApp = connector?.id === 'farcaster';
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      disconnect();
+    } catch (err) {
+      console.error("Logout failed", err);
+    }
+  };
 
   // 1. Get Poll ID
   const { data: nextPollId } = useReadContract({
@@ -186,27 +198,29 @@ export default function App() {
               </div>
 
               <div className="flex items-center gap-2">
-
-
-                {!isConnected ? (
-                  <button
-                    onClick={() => connect({ connector: injected() })}
-                    className="px-4 py-2 bg-black text-white rounded-2xl text-xs font-bold hover:scale-95 transition-transform flex items-center gap-2"
-                  >
-                    <Wallet size={14} /> Connect
-                  </button>
+                {!isMiniApp ? (
+                  <div className="scale-90">
+                    <OpenfortButton />
+                  </div>
                 ) : (
-                  <button
-                    onClick={() => !isMiniApp && disconnect()}
-                    disabled={isMiniApp}
-                    className={cn(
-                      "px-4 py-2 bg-white border-2 border-gray-100 rounded-2xl text-xs font-bold text-gray-500 transition-colors",
-                      !isMiniApp ? "hover:bg-gray-50 cursor-pointer" : "cursor-default"
-                    )}
-                  >
-                    {address?.slice(0, 6)}...{address?.slice(-4)}
-                  </button>
-                )}
+                  !isConnected ? (
+                    <button
+                      onClick={() => connect({ connector: injected() })}
+                      className="px-4 py-2 bg-black text-white rounded-2xl text-xs font-bold hover:scale-95 transition-transform flex items-center gap-2"
+                    >
+                      <Wallet size={14} /> Connect
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => disconnect()}
+                      className={cn(
+                        "px-4 py-2 bg-white border-2 border-gray-100 rounded-2xl text-xs font-bold text-gray-500 transition-colors",
+                        "hover:bg-gray-50 cursor-pointer"
+                      )}
+                    >
+                      {address?.slice(0, 6)}...{address?.slice(-4)}
+                    </button>
+                  ))}
               </div>
 
               {/* Debug: Create Poll Button (Dev Only) */}
@@ -311,6 +325,7 @@ export default function App() {
                     now={now}
                     onSuccess={showSuccess}
                     onError={showError}
+                    onLogout={handleLogout}
                   />
                 )}
               </AnimatePresence>
@@ -984,7 +999,7 @@ function RevealZone({ pollId, options, onSuccess, onError, phase }: { pollId: nu
 
 
 
-function ProfileView({ address, now, onSuccess, onError }: { address: string | undefined, now: number, onSuccess: (t: string, m: string) => void, onError: (t: string, m: string) => void }) {
+function ProfileView({ address, now, onSuccess, onError, onLogout }: { address: string | undefined, now: number, onSuccess: (t: string, m: string) => void, onError: (t: string, m: string) => void, onLogout?: () => void }) {
   const handleResolve = async (pId: number) => {
     if (!address || !publicClient) return;
     try {
@@ -1319,6 +1334,16 @@ function ProfileView({ address, now, onSuccess, onError }: { address: string | u
           <p className="text-xs font-bold text-gray-400 uppercase mb-1">Est. Won</p>
           <p className="text-3xl font-display font-black text-candy-mint">{totalWon.toFixed(3)} USDC</p>
         </div>
+        {onLogout && (
+          <div className="col-span-2 pt-4 border-t border-gray-100 mt-2">
+            <button
+              onClick={onLogout}
+              className="w-full py-3 bg-gray-100 text-gray-400 font-bold rounded-xl hover:bg-red-50 hover:text-red-500 transition-all flex items-center justify-center gap-2"
+            >
+              LOGOUT
+            </button>
+          </div>
+        )}
       </div>
 
       <h3 className="text-lg font-display font-bold text-gray-800 px-2">Voting History</h3>
@@ -1561,4 +1586,16 @@ function LeaderboardRow({ user, index }: { user: any, index: number }) {
       </div>
     </div>
   )
+}
+
+export default function App() {
+  const { connector } = useAccount();
+  const { user } = useUser();
+  const isMiniApp = connector?.id === 'farcaster';
+  const showApp = isMiniApp ? true : !!user;
+
+  if (!showApp && !isMiniApp) {
+    return <AuthContainer />;
+  }
+  return <Dashboard />;
 }
