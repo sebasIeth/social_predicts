@@ -21,8 +21,8 @@ import { ProfileView } from '../components/dashboard/ProfileView';
 
 export function Dashboard() {
     const [activeTab, setActiveTab] = useState<'VOTE' | 'REVEAL' | 'LEADERBOARD' | 'PROFILE'>('VOTE');
-    const [isMiniApp, setIsMiniApp] = useState(false);
-    const { address, isConnected } = useAccount();
+    const { address, isConnected, connector } = useAccount();
+    const [isMiniApp, setIsMiniApp] = useState(connector?.id === 'farcaster');
     const { connect } = useConnect();
     const { disconnect } = useDisconnect();
     const { signOut } = useSignOut();
@@ -30,6 +30,10 @@ export function Dashboard() {
     const [feedbackModal, setFeedbackModal] = useState<{ type: 'success' | 'error', title: string, message: string, isOpen: boolean } | null>(null);
 
     useEffect(() => {
+        if (connector?.id === 'farcaster') {
+            setIsMiniApp(true);
+        }
+
         const init = async () => {
             // Check if running in Farcaster
             if (typeof window !== 'undefined' && (window as any).farcaster) {
@@ -42,7 +46,7 @@ export function Dashboard() {
             }
         };
         init();
-    }, []);
+    }, [connector]);
 
     const handleLogout = async () => {
         try {

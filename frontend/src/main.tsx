@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { config } from './wagmi'
 import './index.css'
 import App from './App.tsx'
-import { OpenfortProviderWrapper } from "./providers/OpenfortProvaider.tsx"
+import { OpenfortProviderWrapper } from "./providers/OpenfortProvider.tsx"
 
 const queryClient = new QueryClient()
 
@@ -13,9 +13,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-          <OpenfortProviderWrapper>
-              <App />
-          </OpenfortProviderWrapper>
+        <OpenfortProviderWrapper>
+          <App />
+        </OpenfortProviderWrapper>
       </QueryClientProvider>
     </WagmiProvider>
   </StrictMode>,
