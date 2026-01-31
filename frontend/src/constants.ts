@@ -1,5 +1,6 @@
 export const ORACLE_POLL_ADDRESS = "0xCf9334fCD39d87df96420F18E6Fe117B81170e84";
 export const BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+export const STAKE_AMOUNT = 1000n; // 0.001 USDC (6 decimals)
 
 export const ORACLE_POLL_ABI = [
     {
