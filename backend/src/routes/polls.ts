@@ -14,12 +14,14 @@ router.post('/', async (req, res) => {
             update.isCommunity = isCommunity;
         }
 
+        const updateOp: any = { $set: update };
+        if (typeof isCommunity === 'undefined') {
+            updateOp.$setOnInsert = { isCommunity: false };
+        }
+
         const poll = await Poll.findOneAndUpdate(
             { contractPollId },
-            {
-                $set: update,
-                $setOnInsert: { isCommunity: (typeof isCommunity !== 'undefined') ? isCommunity : false }
-            },
+            updateOp,
             { new: true, upsert: true }
         );
         res.json(poll);

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { OpenfortButton, useSignOut } from "@openfort/react";
 import { Sparkles, Trophy, Unlock, Zap, Wallet } from 'lucide-react';
-import { useAccount, useConnect, useDisconnect, useReadContract, useWatchContractEvent, useWriteContract } from 'wagmi';
+import { useAccount, useConnect, useDisconnect, useReadContract, useWatchContractEvent, useWriteContract, usePublicClient } from 'wagmi';
 import { injected } from 'wagmi/connectors';
 import { formatUnits } from 'viem';
 
@@ -67,11 +67,8 @@ export function Dashboard() {
             try {
                 const res = await fetch(`${import.meta.env.VITE_API_URL}/api/polls?type=${pollType}`);
                 const data = await res.json();
+                console.log(`[Dashboard] Fetched ${pollType} polls:`, data);
                 setPollsList(data);
-                // Default to latest official poll if on official tab and nothing selected
-                if (pollType === 'official' && data.length > 0 && selectedPollId === null) {
-                    setSelectedPollId(data[0].contractPollId);
-                }
             } catch (err) {
                 console.error("Failed to fetch polls", err);
             }
@@ -80,31 +77,75 @@ export function Dashboard() {
     }, [pollType, selectedPollId]); // Add selectedPollId dependency only if we want auto-select behavior
 
     // 1. Get Poll ID (Used for bounds, but we rely on selectedPollId now)
+    // 1. Get Poll ID for SYNCING (Latest on Chain)
     const { data: nextPollId } = useReadContract({
         address: ORACLE_POLL_ADDRESS,
         abi: ORACLE_POLL_ABI,
         functionName: 'nextPollId',
     });
 
-    const activePollId = selectedPollId !== null ? selectedPollId : (nextPollId ? Number(nextPollId) - 1 : 0);
+    const latestChainPollId = nextPollId ? Number(nextPollId) - 1 : 0;
 
-    // 2. Get Poll Data specific to selected/active poll
+    // 2. Active Poll ID for DISPLAY (Driven by Selection or DB List)
+    // If we are in "official" tab and have no specific selection, show the latest *official* poll from DB.
+    // If we are in "community", we rely on selectedPollId (user must click from list).
+    let activePollId = -1;
+    if (selectedPollId !== null) {
+        activePollId = selectedPollId;
+    } else if (pollType === 'official' && pollsList.length > 0) {
+        // Automatically show the latest official poll
+        activePollId = pollsList[0].contractPollId;
+    }
+    // For community, if selectedPollId is null, activePollId stays -1 -> List Mode.
+
+    // --- DATA FOR DISPLAY ---
     const { data: pollData, refetch: refetchPoll } = useReadContract({
         address: ORACLE_POLL_ADDRESS,
         abi: ORACLE_POLL_ABI,
         functionName: 'polls',
-        args: [BigInt(activePollId)],
-        query: {
-            enabled: activePollId >= 0,
-        }
+        args: [BigInt(activePollId >= 0 ? activePollId : 0)], // Safe fallback if -1
+        query: { enabled: activePollId >= 0 }
     });
+
+    const { data: options } = useReadContract({
+        address: ORACLE_POLL_ADDRESS,
+        abi: ORACLE_POLL_ABI,
+        functionName: 'getPollOptions',
+        args: [BigInt(activePollId >= 0 ? activePollId : 0)],
+        query: { enabled: activePollId >= 0 }
+    });
+
+    // --- DATA FOR SYNCING (Head of Chain) ---
+    const { data: syncPollData } = useReadContract({
+        address: ORACLE_POLL_ADDRESS,
+        abi: ORACLE_POLL_ABI,
+        functionName: 'polls',
+        args: [BigInt(latestChainPollId)],
+        query: { enabled: latestChainPollId >= 0 }
+    });
+
+    const { data: syncOptions } = useReadContract({
+        address: ORACLE_POLL_ADDRESS,
+        abi: ORACLE_POLL_ABI,
+        functionName: 'getPollOptions',
+        args: [BigInt(latestChainPollId)],
+        query: { enabled: latestChainPollId >= 0 }
+    });
+
+    // Fetch Admin to check for "Official" status
+    const { data: adminAddress } = useReadContract({
+        address: ORACLE_POLL_ADDRESS,
+        abi: ORACLE_POLL_ABI,
+        functionName: 'admin',
+    });
+
+    const publicClient = usePublicClient();
 
     useWatchContractEvent({
         address: ORACLE_POLL_ADDRESS,
         abi: ORACLE_POLL_ABI,
         eventName: 'VoteCommitted',
         onLogs() {
-            console.log('Vote committed! Refetching poll data...');
             refetchPoll();
         },
     });
@@ -114,20 +155,8 @@ export function Dashboard() {
         abi: ORACLE_POLL_ABI,
         eventName: 'VoteRevealed',
         onLogs() {
-            console.log('Vote revealed! Refetching poll data...');
             refetchPoll();
         },
-    });
-
-    /* 3. Get Options for Active Poll */
-    const { data: options } = useReadContract({
-        address: ORACLE_POLL_ADDRESS,
-        abi: ORACLE_POLL_ABI,
-        functionName: 'getPollOptions',
-        args: [BigInt(activePollId)],
-        query: {
-            enabled: activePollId >= 0,
-        }
     });
 
     // Ticker for countdowns
@@ -138,7 +167,6 @@ export function Dashboard() {
     }, []);
 
     let phase: 'COMMIT' | 'REVEAL' | 'RESULT' = 'COMMIT';
-
     if (pollData) {
         const commitEnd = Number(pollData[2]);
         const revealEnd = Number(pollData[3]);
@@ -147,27 +175,126 @@ export function Dashboard() {
         else phase = 'RESULT';
     }
 
-    // Sync poll with backend
+    // AUTO-CORRECT: Check if any "Official" polls are actually Community polls (historical fix)
+    useEffect(() => {
+        if (pollType === 'official' && pollsList.length > 0 && publicClient && adminAddress) {
+            const checkPolls = async () => {
+                const pollsToCheck = pollsList.slice(0, 5); // Check latest 5
+
+                let currentBlock = 0n;
+                try {
+                    currentBlock = await publicClient.getBlockNumber();
+                } catch (e) {
+                    console.error("[Auto-Correct] Failed to get block number", e);
+                    return;
+                }
+
+                for (const poll of pollsToCheck) {
+                    // Skip if no createdAt to estimate from
+                    if (!poll.createdAt) continue;
+
+                    try {
+                        const secondsAgo = (Date.now() - new Date(poll.createdAt).getTime()) / 1000;
+                        const blocksAgo = BigInt(Math.floor(secondsAgo / 2)); // Base ~2s block time
+                        let estimatedBlock = currentBlock - blocksAgo;
+                        if (estimatedBlock < 0n) estimatedBlock = 0n;
+
+                        // Range: +/- 1000 blocks (~30 mins window)
+                        const fromBlock = estimatedBlock > 1000n ? estimatedBlock - 1000n : 0n;
+                        const toBlock = estimatedBlock + 1000n;
+
+                        const logs = await publicClient.getContractEvents({
+                            address: ORACLE_POLL_ADDRESS,
+                            abi: ORACLE_POLL_ABI,
+                            eventName: 'PollCreated',
+                            args: { pollId: BigInt(poll.contractPollId) },
+                            fromBlock: fromBlock,
+                            toBlock: toBlock > currentBlock ? currentBlock : toBlock
+                        });
+
+                        if (logs.length > 0) {
+                            const tx = await publicClient.getTransaction({ hash: logs[0].transactionHash });
+                            if (tx.from.toLowerCase() !== adminAddress.toLowerCase()) {
+                                console.log(`[Auto-Correct] Poll ${poll.contractPollId} is improperly marked. Fixing...`);
+                                await fetch(`${import.meta.env.VITE_API_URL}/api/polls`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        contractPollId: poll.contractPollId,
+                                        title: poll.title, // Keep existing title
+                                        options: poll.options,
+                                        commitEndTime: poll.commitEndTime,
+                                        revealEndTime: poll.revealEndTime,
+                                        isCommunity: true // FORCE CORRECT TYPE
+                                    })
+                                });
+                            }
+                        } else {
+                            console.log(`[Auto-Correct] No logs found for poll ${poll.contractPollId} in range ${fromBlock}-${toBlock}`);
+                        }
+                    } catch (e) {
+                        console.error("[Auto-Correct] Failed for poll", poll.contractPollId, e);
+                    }
+                }
+            };
+            checkPolls();
+        }
+    }, [pollsList, pollType, publicClient, adminAddress]);
+
+    // BACKGROUND SYNC: Sync the LATEST chain poll to DB
     const lastSyncedId = useRef<number | null>(null);
     useEffect(() => {
-        if (pollData && pollData[1] && options && lastSyncedId.current !== activePollId) {
-            lastSyncedId.current = activePollId;
-            fetch(`${import.meta.env.VITE_API_URL}/api/polls`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contractPollId: activePollId,
-                    title: pollData[1],
-                    options: options || [],
-                    commitEndTime: Number(pollData[2]),
-                    revealEndTime: Number(pollData[3])
-                })
-            }).catch(err => {
-                console.error("Sync Error:", err);
-                lastSyncedId.current = null; // Allow retry on error
-            });
+        // We sync 'latestChainPollId' so the DB knows about it.
+        if (syncPollData && syncPollData[1] && syncOptions && adminAddress && publicClient && lastSyncedId.current !== latestChainPollId) {
+            const syncPoll = async () => {
+                try {
+                    let isCommunity = false;
+                    try {
+                        const logs = await publicClient.getContractEvents({
+                            address: ORACLE_POLL_ADDRESS,
+                            abi: ORACLE_POLL_ABI,
+                            eventName: 'PollCreated',
+                            args: { pollId: BigInt(latestChainPollId) },
+                            fromBlock: 'earliest'
+                        });
+
+                        if (logs.length > 0) {
+                            const txHash = logs[0].transactionHash;
+                            const tx = await publicClient.getTransaction({ hash: txHash });
+                            console.log(`[Sync] Poll ${latestChainPollId} Creator: ${tx.from}, Admin: ${adminAddress}`);
+
+                            if (tx.from.toLowerCase() !== adminAddress.toLowerCase()) {
+                                isCommunity = true;
+                                console.log(`[Sync] Poll ${latestChainPollId} detected as COMMUNITY poll.`);
+                            }
+                        } else {
+                            console.warn(`[Sync] No creation logs found for poll ${latestChainPollId}`);
+                        }
+                    } catch (err) {
+                        console.error("Error fetching creator info:", err);
+                    }
+
+                    lastSyncedId.current = latestChainPollId;
+                    await fetch(`${import.meta.env.VITE_API_URL}/api/polls`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contractPollId: latestChainPollId,
+                            title: syncPollData[1],
+                            options: syncOptions || [],
+                            commitEndTime: Number(syncPollData[2]),
+                            revealEndTime: Number(syncPollData[3]),
+                            isCommunity: isCommunity
+                        })
+                    });
+                } catch (err) {
+                    console.error("Sync Error:", err);
+                    lastSyncedId.current = null;
+                }
+            };
+            syncPoll();
         }
-    }, [activePollId, pollData, options]);
+    }, [latestChainPollId, syncPollData, syncOptions, adminAddress, publicClient]);
 
     // Dev only create poll
     const { writeContractAsync } = useWriteContract();
@@ -263,7 +390,7 @@ export function Dashboard() {
                         <main className="px-4 space-y-4">
 
                             {/* Hero Card: The Question */}
-                            {activeTab !== 'LEADERBOARD' && activeTab !== 'PROFILE' && (
+                            {activeTab !== 'LEADERBOARD' && activeTab !== 'PROFILE' && !(pollType === 'community' && selectedPollId === null) && (
                                 <motion.div
                                     layout
                                     className="bg-white rounded-[2.5rem] p-8 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] border-b-8 border-gray-100 relative overflow-hidden"
