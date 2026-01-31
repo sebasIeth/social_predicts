@@ -65,4 +65,54 @@ router.get('/user/:address', async (req, res) => {
     }
 });
 
+// @route   GET /api/votes/:address/active-reveals
+// @desc    Get votes that are ready to be revealed (Poll in Reveal Phase + Not Revealed)
+router.get('/:address/active-reveals', async (req, res) => {
+    try {
+        const voterAddress = req.params.address;
+        const now = Math.floor(Date.now() / 1000);
+
+        // Find votes by user that are NOT revealed
+        // AND match polls where commitEndTime < now < revealEndTime
+        const votes = await Vote.aggregate([
+            {
+                $match: {
+                    voterAddress: voterAddress,
+                    revealed: { $ne: true }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'polls',
+                    localField: 'pollId',
+                    foreignField: 'contractPollId',
+                    as: 'pollInfo'
+                }
+            },
+            { $unwind: '$pollInfo' },
+            {
+                $match: {
+                    'pollInfo.commitEndTime': { $lt: now },
+                    'pollInfo.revealEndTime': { $gt: now }
+                }
+            },
+            {
+                $project: {
+                    pollId: 1,
+                    optionIndex: 1,
+                    salt: 1,
+                    commitmentIndex: 1,
+                    pollTitle: '$pollInfo.title',
+                    pollQuestion: '$pollInfo.question'
+                }
+            }
+        ]);
+
+        res.json(votes);
+    } catch (err: any) {
+        console.error("Error fetching active reveals:", err);
+        res.status(500).send("Server Error");
+    }
+});
+
 export default router;

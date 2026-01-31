@@ -38,7 +38,8 @@ export class AutoPilotService {
         if (!this.isRunning) return;
 
         try {
-            await this.processPolls();
+            await this.handleReveals();
+            await this.handleClaims();
         } catch (error) {
             console.error("AutoPilot Error:", error);
         }
@@ -46,124 +47,160 @@ export class AutoPilotService {
         setTimeout(() => this.runLoop(), POLLING_INTERVAL);
     }
 
-    private async processPolls() {
+    private async handleReveals() {
         if (!this.contract) return;
-        const contract = this.contract;
+        const now = Math.floor(Date.now() / 1000);
 
-        // fetch latest poll ID from contract
-        const nextPollId = await contract.nextPollId();
-        const count = Number(nextPollId);
+        // Find polls currently in reveal phase
+        // commitEndTime < now < revealEndTime
+        const activePolls = await PollModel.find({
+            commitEndTime: { $lt: now },
+            revealEndTime: { $gt: now }
+        });
 
-        console.log(`AutoPilot: Checking ${count} polls...`);
+        if (activePolls.length > 0) {
+            console.log(`AutoPilot: Found ${activePolls.length} polls in Reveal Phase.`);
+        }
 
-        for (let i = 0; i < count; i++) {
+        for (const poll of activePolls) {
+            await this.processRevealForPoll(poll);
+        }
+    }
+
+    private async processRevealForPoll(poll: any) {
+        if (!this.contract) return;
+
+        // Find unrevealed votes for this poll
+        const votesToReveal = await Vote.find({
+            pollId: poll.contractPollId,
+            revealed: { $ne: true }
+        });
+
+        for (const vote of votesToReveal) {
             try {
-                await this.checkPoll(i);
-            } catch (err) {
-                console.error(`AutoPilot: Error processing poll ${i}`, err);
+                // Check if user is premium
+                const isPremium = await this.contract.isPremium(vote.voterAddress);
+
+                if (isPremium) {
+                    console.log(`AutoPilot: Revealing vote for premium user ${vote.voterAddress} on poll ${poll.contractPollId}`);
+
+                    const tx = await this.contract.adminRevealVote(
+                        vote.pollId,
+                        vote.voterAddress,
+                        vote.commitmentIndex,
+                        vote.optionIndex,
+                        vote.salt
+                    );
+
+                    console.log(`AutoPilot: Reveal tx sent: ${tx.hash}`);
+                    await tx.wait();
+
+                    vote.revealed = true;
+                    await vote.save();
+                    console.log(`AutoPilot: Vote revealed for ${vote.voterAddress}`);
+                }
+            } catch (err: any) {
+                console.error(`AutoPilot: Failed to reveal for ${vote.voterAddress}:`, err.message);
+                if (err.message && err.message.includes("Already revealed")) {
+                    vote.revealed = true;
+                    await vote.save();
+                }
             }
         }
     }
 
-    private async checkPoll(pollId: number) {
+    private async handleClaims() {
         if (!this.contract) return;
-        const contract = this.contract;
-
-        const poll = await contract.polls(pollId);
         const now = Math.floor(Date.now() / 1000);
 
-        const commitEndTime = Number(poll.commitEndTime);
-        const revealEndTime = Number(poll.revealEndTime);
-        const resolved = poll.resolved;
+        // Find polls that have ended (reveal time passed)
+        // Optimization: Only check polls updated recently or flagged as not resolved? 
+        // For now, let's query votes that are revealed but not claimed.
+        // This is much more efficient than checking all polls.
 
-        // 1. REVEAL PHASE
-        if (now >= commitEndTime && now < revealEndTime) {
-            // Find unrevealed votes in DB
-            const votesToReveal = await Vote.find({
-                pollId: pollId,
-                revealed: { $ne: true }
-            });
+        const unclaimedVotes = await Vote.find({
+            revealed: true,
+            rewardClaimed: { $ne: true }
+        });
 
-            if (votesToReveal.length === 0) return;
+        if (unclaimedVotes.length === 0) return;
 
-            console.log(`AutoPilot: Poll ${pollId} is in Reveal Phase. Found ${votesToReveal.length} pending votes.`);
+        // Group votes by pollId to check resolution status efficiently
+        const distinctPollIds = [...new Set(unclaimedVotes.map(v => v.pollId))];
 
-            for (const vote of votesToReveal) {
-                // Check if user is premium
-                const isPremium = await contract.isPremium(vote.voterAddress);
-                if (isPremium) {
-                    console.log(`AutoPilot: Revealing vote for premium user ${vote.voterAddress}`);
-                    try {
-                        const tx = await contract.adminRevealVote(
-                            pollId,
-                            vote.voterAddress,
-                            vote.commitmentIndex,
-                            vote.optionIndex,
-                            vote.salt
-                        );
-                        console.log(`AutoPilot: Transaction sent: ${tx.hash}`);
-                        await tx.wait();
+        for (const pollId of distinctPollIds) {
+            await this.processClaimForPoll(pollId, unclaimedVotes.filter(v => v.pollId === pollId));
+        }
+    }
 
-                        vote.revealed = true;
-                        await vote.save();
-                        console.log("AutoPilot: Vote revealed successfully.");
-                    } catch (e: any) {
-                        console.error(`AutoPilot: Failed to reveal vote for ${vote.voterAddress}:`, e.message);
-                        // If already revealed (error), mark as revealed locally
-                        if (e.message.includes("Already revealed")) {
-                            vote.revealed = true;
-                            await vote.save();
-                        }
+    private async processClaimForPoll(pollId: number, votes: any[]) {
+        if (!this.contract) return;
+
+        try {
+            // Check if poll is resolved on-chain
+            const pollInfo = await this.contract.polls(pollId);
+            const isResolved = pollInfo[5]; // resolved bool
+            const winningOptionIndex = Number(pollInfo[6]);
+
+            // Attempt resolution if needed? 
+            // The original code attempted resolution if ended but not resolved.
+            // Let's keep that logic if we find an ended poll in our DB that isn't resolved.
+            const dbPoll = await PollModel.findOne({ contractPollId: pollId });
+            const now = Math.floor(Date.now() / 1000);
+
+            if (!isResolved && dbPoll && now > dbPoll.revealEndTime) {
+                console.log(`AutoPilot: Poll ${pollId} ended but not resolved. Attempting resolution...`);
+                try {
+                    const tx = await this.contract.resolvePoll(pollId);
+                    await tx.wait();
+                    console.log(`AutoPilot: Poll ${pollId} resolved!`);
+                    // Re-fetch info
+                    const updatedInfo = await this.contract.polls(pollId);
+                    if (updatedInfo[5]) { // verified resolved
+                        await this.processWinners(pollId, Number(updatedInfo[6]), votes);
                     }
+                } catch (e: any) {
+                    // console.error("AutoPilot: Resolution failed:", e.message);
                 }
+            } else if (isResolved) {
+                await this.processWinners(pollId, winningOptionIndex, votes);
             }
-        }
 
-        // 2. RESOLUTION / CLAIM PHASE
-        if (now >= revealEndTime && !resolved) {
-            // Attempt to resolve if we have any stake involved (or just do it generally)
-            // Ideally we check if we can resolve.
-            console.log(`AutoPilot: Poll ${pollId} ended. Attempting resolution...`);
+        } catch (err) {
+            console.error(`AutoPilot: Error checking poll ${pollId} for claims:`, err);
+        }
+    }
+
+    private async processWinners(pollId: number, winningOption: number, votes: any[]) {
+        if (!this.contract) return;
+
+        // Filter only those who voted for the winner
+        const winningVotes = votes.filter(v => v.optionIndex === winningOption);
+
+        for (const vote of winningVotes) {
             try {
-                const tx = await contract.resolvePoll(pollId);
-                await tx.wait();
-                console.log(`AutoPilot: Poll ${pollId} resolved!`);
-            } catch (e: any) {
-                // Ignore error if already resolved (race condition) or can't resolve yet
-                // console.log("AutoPilot: Resolution skipped/failed:", e.message);
-            }
-        }
+                const isPremium = await this.contract.isPremium(vote.voterAddress);
+                if (isPremium) {
+                    console.log(`AutoPilot: Claiming reward for premium user ${vote.voterAddress} on poll ${pollId}`);
 
-        // 3. CLAIM REWARDS
-        if (now >= revealEndTime) {
-            // Refresh poll state to check resolved
-            const updatedPoll = await contract.polls(pollId);
-            if (updatedPoll.resolved) {
-                const winners = await Vote.find({
-                    pollId: pollId,
-                    optionIndex: Number(updatedPoll.winningOptionIndex),
-                    rewardClaimed: { $ne: true },
-                    revealed: true // Must be revealed to win
-                });
+                    const tx = await this.contract.adminClaimReward(
+                        pollId,
+                        vote.voterAddress,
+                        vote.commitmentIndex
+                    );
 
-                for (const vote of winners) {
-                    const isPremium = await contract.isPremium(vote.voterAddress);
-                    if (isPremium) {
-                        console.log(`AutoPilot: Claiming reward for ${vote.voterAddress}`);
-                        try {
-                            const tx = await contract.adminClaimReward(pollId, vote.voterAddress, vote.commitmentIndex);
-                            await tx.wait();
-                            vote.rewardClaimed = true;
-                            await vote.save();
-                            console.log("AutoPilot: Reward claimed!");
-                        } catch (e: any) {
-                            console.error(`AutoPilot: Claim failed for ${vote.voterAddress}:`, e.message);
-                            if (e.message.includes("Already claimed")) {
-                                vote.rewardClaimed = true;
-                                await vote.save();
-                            }
-                        }
-                    }
+                    console.log(`AutoPilot: Claim tx sent: ${tx.hash}`);
+                    await tx.wait();
+
+                    vote.rewardClaimed = true;
+                    await vote.save();
+                    console.log(`AutoPilot: Reward claimed for ${vote.voterAddress}`);
+                }
+            } catch (err: any) {
+                console.error(`AutoPilot: Failed to claim for ${vote.voterAddress}:`, err.message);
+                if (err.message && err.message.includes("Already claimed")) {
+                    vote.rewardClaimed = true;
+                    await vote.save();
                 }
             }
         }

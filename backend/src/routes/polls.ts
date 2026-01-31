@@ -7,10 +7,10 @@ const router = express.Router();
 // @desc    Create a new poll
 router.post('/', async (req, res) => {
     try {
-        const { contractPollId, title, options, commitEndTime, revealEndTime } = req.body;
+        const { contractPollId, title, options, commitEndTime, revealEndTime, isCommunity } = req.body;
         const poll = await Poll.findOneAndUpdate(
             { contractPollId },
-            { title, options, commitEndTime, revealEndTime },
+            { title, options, commitEndTime, revealEndTime, isCommunity: isCommunity || false },
             { new: true, upsert: true }
         );
         res.json(poll);
@@ -23,7 +23,16 @@ router.post('/', async (req, res) => {
 // @desc    Get all polls
 router.get('/', async (req, res) => {
     try {
-        const polls = await Poll.find().sort({ createdAt: -1 });
+        const { type } = req.query;
+        let query = {};
+
+        if (type === 'community') {
+            query = { isCommunity: true };
+        } else if (type === 'official') {
+            query = { isCommunity: false };
+        }
+
+        const polls = await Poll.find(query).sort({ createdAt: -1 });
         res.json(polls);
     } catch (err: any) {
         res.status(500).send('Server Error');

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { OpenfortButton, useSignOut, useUser } from "@openfort/react";
 import { AuthContainer } from './components/auth/AuthContainer';
-import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, X, AlertCircle, Gavel, Eye, EyeOff } from 'lucide-react';
+import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, X, AlertCircle, Gavel, PartyPopper } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, usePublicClient, useSwitchChain, useBalance, useWatchContractEvent, useReadContracts } from 'wagmi';
@@ -55,23 +55,45 @@ function Dashboard() {
     }
   };
 
-  // 1. Get Poll ID
+  const [pollType, setPollType] = useState<'official' | 'community'>('official');
+  const [pollsList, setPollsList] = useState<any[]>([]);
+  const [selectedPollId, setSelectedPollId] = useState<number | null>(null);
+
+  // Fetch Polls List
+  useEffect(() => {
+    const fetchPolls = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/polls?type=${pollType}`);
+        const data = await res.json();
+        setPollsList(data);
+        // Default to latest official poll if on official tab and nothing selected
+        if (pollType === 'official' && data.length > 0 && selectedPollId === null) {
+          setSelectedPollId(data[0].contractPollId);
+        }
+      } catch (err) {
+        console.error("Failed to fetch polls", err);
+      }
+    };
+    fetchPolls();
+  }, [pollType, selectedPollId]); // Add selectedPollId dependency only if we want auto-select behavior
+
+  // 1. Get Poll ID (Used for bounds, but we rely on selectedPollId now)
   const { data: nextPollId } = useReadContract({
     address: ORACLE_POLL_ADDRESS,
     abi: ORACLE_POLL_ABI,
     functionName: 'nextPollId',
   });
 
-  const currentPollId = nextPollId ? Number(nextPollId) - 1 : 0;
+  const activePollId = selectedPollId !== null ? selectedPollId : (nextPollId ? Number(nextPollId) - 1 : 0);
 
-  // 2. Get Poll Data
+  // 2. Get Poll Data specific to selected/active poll
   const { data: pollData, refetch: refetchPoll } = useReadContract({
     address: ORACLE_POLL_ADDRESS,
     abi: ORACLE_POLL_ABI,
     functionName: 'polls',
-    args: [BigInt(currentPollId)],
+    args: [BigInt(activePollId)],
     query: {
-      enabled: nextPollId !== undefined,
+      enabled: activePollId >= 0,
     }
   });
 
@@ -95,13 +117,14 @@ function Dashboard() {
     },
   });
 
+  /* 3. Get Options for Active Poll */
   const { data: options } = useReadContract({
     address: ORACLE_POLL_ADDRESS,
     abi: ORACLE_POLL_ABI,
     functionName: 'getPollOptions',
-    args: [BigInt(currentPollId)],
+    args: [BigInt(activePollId)],
     query: {
-      enabled: nextPollId !== undefined,
+      enabled: activePollId >= 0,
     }
   });
 
@@ -125,13 +148,13 @@ function Dashboard() {
   // Sync poll with backend
   const lastSyncedId = useRef<number | null>(null);
   useEffect(() => {
-    if (pollData && pollData[1] && options && lastSyncedId.current !== currentPollId) {
-      lastSyncedId.current = currentPollId;
+    if (pollData && pollData[1] && options && lastSyncedId.current !== activePollId) {
+      lastSyncedId.current = activePollId;
       fetch(`${import.meta.env.VITE_API_URL}/api/polls`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contractPollId: currentPollId,
+          contractPollId: activePollId,
           title: pollData[1],
           options: options || [],
           commitEndTime: Number(pollData[2]),
@@ -142,7 +165,7 @@ function Dashboard() {
         lastSyncedId.current = null; // Allow retry on error
       });
     }
-  }, [currentPollId, pollData, options]);
+  }, [activePollId, pollData, options]);
 
   const { writeContractAsync } = useWriteContract();
 
@@ -295,26 +318,97 @@ function Dashboard() {
               {/* Action Area */}
               <AnimatePresence mode="wait">
                 {activeTab === 'VOTE' && (
-                  <VotingGrid
+                  <motion.div
                     key="vote"
-                    pollId={currentPollId}
-                    options={options || []}
-                    enabled={phase === 'COMMIT'}
-                    onSuccess={showSuccess}
-                    onError={showError}
-                    onVoteSuccess={() => {
-                      refetchPoll();
-                    }}
-                  />
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.2 }}
+                    className="space-y-6"
+                  >
+
+                    {/* Community / Official Toggle */}
+                    <div className="flex p-1 bg-gray-100 rounded-2xl mb-4">
+                      <button
+                        onClick={() => { setPollType('official'); setSelectedPollId(null); }}
+                        className={cn(
+                          "flex-1 py-3 rounded-xl font-bold text-sm transition-all",
+                          pollType === 'official' ? "bg-white text-gray-800 shadow-sm" : "text-gray-400 hover:text-gray-600"
+                        )}
+                      >
+                        OFFICIAL
+                      </button>
+                      <button
+                        onClick={() => { setPollType('community'); setSelectedPollId(null); }}
+                        className={cn(
+                          "flex-1 py-3 rounded-xl font-bold text-sm transition-all",
+                          pollType === 'community' ? "bg-white text-gray-800 shadow-sm" : "text-gray-400 hover:text-gray-600"
+                        )}
+                      >
+                        Here Community
+                      </button>
+                    </div>
+
+                    {/* If Community Tab and No Poll Selected, Show List */}
+                    {pollType === 'community' && selectedPollId === null ? (
+                      <div className="space-y-4">
+                        {pollsList.length === 0 && (
+                          <div className="text-center py-10 text-gray-400 font-bold">
+                            No community polls yet. be the first!
+                          </div>
+                        )}
+                        {pollsList.map((p) => (
+                          <div
+                            key={p.contractPollId}
+                            onClick={() => setSelectedPollId(p.contractPollId)}
+                            className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 cursor-pointer hover:scale-[1.02] transition-transform active:scale-95"
+                          >
+                            <h3 className="font-bold text-lg text-gray-800 mb-2">{p.title}</h3>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs font-bold text-gray-400 uppercase">Ends in {formatTime(p.commitEndTime - (Date.now() / 1000))}</span>
+                              <button className="px-4 py-2 bg-candy-purple text-white rounded-xl text-xs font-bold">Vote</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <>
+                        {/* Back Button for Community Polls */}
+                        {pollType === 'community' && (
+                          <button
+                            onClick={() => setSelectedPollId(null)}
+                            className="mb-2 text-xs font-bold text-gray-400 hover:text-gray-600 flex items-center gap-1"
+                          >
+                            ← Back to List
+                          </button>
+                        )}
+
+                        {/* Existing Poll Card Logic but using pollData (which is now dynamic) */}
+                        {pollData ? (
+                          <VotingGrid
+                            key="vote"
+                            pollId={activePollId}
+                            options={options || []}
+                            enabled={phase === 'COMMIT'}
+                            onSuccess={showSuccess}
+                            onError={showError}
+                            onVoteSuccess={() => {
+                              refetchPoll();
+                            }}
+                          />
+                        ) : (
+                          <div className="text-center py-20 text-gray-400">Loading Poll...</div>
+                        )}
+                      </>
+                    )}
+
+                  </motion.div>
                 )}
                 {activeTab === 'REVEAL' && (
                   <RevealZone
                     key="reveal"
-                    pollId={currentPollId}
-                    options={options || []}
                     onSuccess={showSuccess}
                     onError={showError}
-                    phase={phase}
                   />
                 )}
                 {activeTab === 'LEADERBOARD' && <LeaderboardView key="leader" />}
@@ -770,227 +864,109 @@ function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVoteSucces
   );
 }
 
-function RevealZone({ pollId, options, onSuccess, onError, phase }: { pollId: number, options: readonly string[], onSuccess: (t: string, m: string) => void, onError: (t: string, m: string) => void, phase: string }) {
-  const [localVotes, setLocalVotes] = useState<any[]>([]);
+function RevealZone({ onSuccess, onError }: { onSuccess: (t: string, m: string) => void, onError: (t: string, m: string) => void }) {
+  const [activeReveals, setActiveReveals] = useState<any[]>([]);
   const { address } = useAccount();
   const { writeContractAsync: writeReveal } = useWriteContract();
-  const [revealingIndex, setRevealingIndex] = useState<number | null>(null);
-  const [visibleVotes, setVisibleVotes] = useState<Set<number>>(new Set());
-
-  const toggleVisibility = (index: number) => {
-    setVisibleVotes(prev => {
-      const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      return next;
-    });
-  };
-
-  useEffect(() => {
-    const syncVotes = async () => {
-      // ... same logic
-      if (!address) return;
-      const storageKey = `oracle_poll_votes_${pollId}_${address}`;
-      let saved = JSON.parse(localStorage.getItem(storageKey) || '[]');
-      try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/votes/user/${address}`);
-        const dbVotes = await res.json();
-        const relevant = dbVotes.filter((v: any) => v.pollId === pollId);
-        if (relevant.length > 0) {
-          const formatted = relevant.map((rv: any) => ({
-            vote: rv.optionIndex,
-            salt: rv.salt,
-            commitmentIndex: rv.commitmentIndex
-          }));
-          setLocalVotes(formatted);
-          localStorage.setItem(storageKey, JSON.stringify(formatted));
-        } else {
-          setLocalVotes(saved);
-        }
-      } catch (e) {
-        setLocalVotes(saved);
-      }
-    };
-    syncVotes();
-  }, [address, pollId]);
-
-  /* New Hook for publicClient */
+  const [revealingId, setRevealingId] = useState<string | null>(null);
   const publicClient = usePublicClient();
 
+  // Fetch active reveals from backend
   useEffect(() => {
-    const verifyRevealed = async () => {
-      if (!publicClient || localVotes.length === 0) return;
-
-      // Filter votes that are NOT yet marked as revealed locally
-      const toCheck = localVotes.filter(v => !v.revealed);
-      if (toCheck.length === 0) return;
-
-      console.log(`Verifying ${toCheck.length} votes for reveal status...`);
-      let updates: any = {};
-
-      for (const v of toCheck) {
-        // Throttle to avoid 429
-        await new Promise(r => setTimeout(r, 1000));
-
-        try {
-          // 1. First check the public mapping 'votes'
-          // ABI: votes(pollId, voter, commitmentIndex) -> optionIndex
-          const recordedOption = await publicClient.readContract({
-            address: ORACLE_POLL_ADDRESS,
-            abi: ORACLE_POLL_ABI,
-            functionName: 'votes',
-            args: [BigInt(pollId), address as `0x${string}`, BigInt(v.commitmentIndex)]
-          });
-
-          // If recorded option matches our local vote, it is confirmed revealed
-          // Note: Option 0 is ambiguous if default is 0, so we skip optimizaton for 0 unless we are sure.
-          // But for now, if it matches, we assume revealed.
-          // Wait, if I voted 0, and it returns 0 (default), it's ambiguous.
-          // If I voted 1, and it returns 1, it's definitely revealed.
-
-          if (Number(recordedOption) === v.vote && v.vote !== 0) {
-            console.log("Verified reveal via view:", v.commitmentIndex);
-            updates[v.commitmentIndex] = true;
-            continue;
-          }
-
-          // 2. Fallback: Simulate the reveal transaction
-          // If it succeeds, it means we CAN reveal => Not revealed yet.
-          // If it fails, it means we CANNOT reveal => Likely already revealed.
-          await publicClient.simulateContract({
-            address: ORACLE_POLL_ADDRESS,
-            abi: ORACLE_POLL_ABI,
-            functionName: 'revealVote',
-            args: [
-              BigInt(pollId),
-              BigInt(v.commitmentIndex),
-              BigInt(v.vote),
-              v.salt as Hex
-            ],
-            account: address as `0x${string}`
-          });
-          // If we get here, it succeeded, so it is NOT revealed.
-
-        } catch (e: any) {
-          // Simulation failed. 
-          // Either invalid params (unlikely if locally stored) or ALREADY REVEALED.
-          // We assume already revealed to be safe and hide the button.
-          console.log("Simulation failed (likely revealed):", v.commitmentIndex);
-          updates[v.commitmentIndex] = true;
-        }
-      }
-
-      if (Object.keys(updates).length > 0) {
-        setLocalVotes(prev => prev.map(p => {
-          if (updates[p.commitmentIndex]) {
-            return { ...p, revealed: true };
-          }
-          return p;
-        }));
+    const fetchReveals = async () => {
+      if (!address) return;
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/votes/${address}/active-reveals`);
+        const data = await res.json();
+        setActiveReveals(data);
+      } catch (e) {
+        console.error("Failed to fetch reveals", e);
       }
     };
+    fetchReveals();
+  }, [address]);
 
-    verifyRevealed();
-  }, [publicClient, localVotes.length, pollId, address]);
-
-  const handleReveal = async (v: any, index: number) => {
+  const handleReveal = async (vote: any) => {
     if (!address || !publicClient) return;
+    const revealKey = `${vote.pollId}-${vote.commitmentIndex}`;
 
     try {
-      setRevealingIndex(index);
+      setRevealingId(revealKey);
       const hash = await writeReveal({
         address: ORACLE_POLL_ADDRESS,
         abi: ORACLE_POLL_ABI,
         functionName: 'revealVote',
         args: [
-          BigInt(pollId),
-          BigInt(v.commitmentIndex),
-          BigInt(v.vote),
-          v.salt as Hex
+          BigInt(vote.pollId),
+          BigInt(vote.commitmentIndex),
+          BigInt(vote.optionIndex),
+          vote.salt as `0x${string}`
         ]
       });
 
       console.log("Reveal Hash:", hash);
       await publicClient.waitForTransactionReceipt({ hash });
 
-      setRevealingIndex(null);
+      setRevealingId(null);
       onSuccess("Vote Revealed!", "Your vote has been recorded on-chain.");
 
-      // Mark as revealed in UI instead of removing?
-      // User requested "lo conto y la visual lo pone para poder revelarlo nuevamente"
-      // So we should keep it but mark REVEALED.
-      setLocalVotes((prev) => {
-        const next = prev.map((item, i) => i === index ? { ...item, revealed: true } : item);
-        const storageKey = `oracle_poll_votes_${pollId}_${address}`;
-        localStorage.setItem(storageKey, JSON.stringify(next));
-        return next;
-      });
+      // Remove from list locally
+      setActiveReveals(prev => prev.filter(v => `${v.pollId}-${v.commitmentIndex}` !== revealKey));
 
     } catch (e: any) {
       console.error(e);
-      setRevealingIndex(null);
+      setRevealingId(null);
       const msg = e.details || e.shortMessage || e.message || "An unexpected error occurred.";
       onError("Reveal Failed", msg);
     }
   };
 
-  const isRevealPhase = phase === 'REVEAL';
-
-  if (localVotes.length === 0) {
+  if (activeReveals.length === 0) {
     return (
       <div className="bg-white/50 rounded-[2.5rem] p-8 text-center border-2 border-dashed border-gray-200">
-        <p className="text-gray-400 font-bold">No saved votes found on this device.</p>
+        <PartyPopper size={48} className="mx-auto mb-4 text-gray-300" />
+        <p className="text-gray-400 font-bold">No votes to reveal right now.</p>
+        <p className="text-xs text-gray-400 mt-2">Come back when a poll ends!</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      {localVotes.map((v, i) => {
-        const isVisible = visibleVotes.has(i);
+      <div className="bg-yellow-50 p-4 rounded-3xl mb-4 flex items-center gap-3">
+        <AlertCircle className="text-yellow-600" />
+        <p className="text-xs font-bold text-yellow-700">these votes are ready to be revealed!</p>
+      </div>
+
+      {activeReveals.map((v) => {
+        const revealKey = `${v.pollId}-${v.commitmentIndex}`;
         return (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-            className="bg-white rounded-3xl p-5 flex items-center justify-between shadow-sm border border-gray-100"
-          >
-            <div className="text-left">
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">
-                Vote #{i + 1}
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="font-display font-bold text-gray-800 text-lg">
-                  {isVisible ? (options[v.vote] || `Option ${v.vote}`) : '••••••••'}
-                </span>
-                <button onClick={() => toggleVisibility(i)} className="text-gray-400 hover:text-gray-600">
-                  {isVisible ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+          <div key={revealKey} className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col gap-3">
+            <div className="flex justify-between items-start">
+              <div>
+                <h4 className="font-bold text-gray-800">{v.pollTitle}</h4>
+                <p className="text-xs text-gray-400 font-bold uppercase mt-1">You Voted: Option {Number(v.optionIndex) + 1}</p>
               </div>
             </div>
 
-            {!isRevealPhase ? (
-              <div className="px-4 py-2 bg-gray-100 text-gray-500 font-bold text-xs rounded-xl flex items-center gap-2">
-                <Unlock size={12} className="text-gray-400" />
-                LOCKED
-              </div>
-            ) : (
-              v.revealed ? (
-                <div className="px-4 py-2 bg-green-100 text-green-600 font-bold text-xs rounded-xl flex items-center gap-2 border border-green-200">
-                  <CheckCircle size={14} /> REVEALED
-                </div>
+            <button
+              onClick={() => handleReveal(v)}
+              disabled={revealingId !== null}
+              className="w-full py-3 bg-candy-yellow text-gray-900 font-black rounded-xl shadow-lg hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {revealingId === revealKey ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-gray-900 border-t-transparent rounded-full" />
+                  REVEALING...
+                </>
               ) : (
-                <button
-                  onClick={() => handleReveal(v, i)}
-                  disabled={revealingIndex !== null}
-                  className="px-6 py-3 bg-candy-yellow text-gray-900 font-black rounded-2xl shadow-lg hover:scale-[1.05] active:scale-95 transition-all disabled:opacity-50"
-                >
-                  {revealingIndex === i ? "REVEALING..." : "REVEAL"}
-                </button>
-              )
-            )}
-          </motion.div>
+                <>
+                  <Unlock size={16} />
+                  REVEAL VOTE
+                </>
+              )}
+            </button>
+          </div>
         )
       })}
     </div>
@@ -1104,6 +1080,84 @@ function ProfileView({ address, now, onSuccess, onError, onLogout }: { address: 
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newPollTitle, setNewPollTitle] = useState('');
+  const [newPollOptions, setNewPollOptions] = useState(['Yes', 'No', 'Maybe', 'Impossible']);
+  const [isCreating, setIsCreating] = useState(false);
+  const { writeContractAsync: writeCreatePoll } = useWriteContract();
+
+  // Check Premium Status
+  const { data: isPremium } = useReadContract({
+    address: ORACLE_POLL_ADDRESS,
+    abi: ORACLE_POLL_ABI,
+    functionName: 'isPremium',
+    args: [address as `0x${string}`],
+    query: {
+      enabled: !!address
+    }
+  });
+
+  const handleCreatePoll = async () => {
+    if (!address || !newPollTitle || newPollOptions.some(o => !o)) {
+      onError("Invalid Input", "Please fill in all fields.");
+      return;
+    }
+    setIsCreating(true);
+    try {
+      // Hardcoded duration as requested: same as admin defaults (e.g. 24h commit, 1h reveal)
+      // For now, let's use 24h (86400s) for commit and +1h (3600s) for reveal
+      const commitDuration = 86400;
+      const revealDuration = 3600;
+
+      // 1. Create on-chain
+      const hash = await writeCreatePoll({
+        address: ORACLE_POLL_ADDRESS,
+        abi: ORACLE_POLL_ABI,
+        functionName: 'createPoll',
+        args: [
+          newPollTitle,
+          newPollOptions,
+          BigInt(commitDuration),
+          BigInt(revealDuration)
+        ]
+      });
+      onSuccess("Poll Created!", "Transaction sent. Waiting for confirmation...");
+      await publicClient?.waitForTransactionReceipt({ hash });
+
+      // 2. Fetch new poll ID to save metadata
+      const nextId = await publicClient?.readContract({
+        address: ORACLE_POLL_ADDRESS,
+        abi: ORACLE_POLL_ABI,
+        functionName: 'nextPollId',
+      });
+      const createdId = Number(nextId) - 1;
+
+      // 3. Save to Backend with isCommunity: true
+      const now = Math.floor(Date.now() / 1000);
+      await fetch(`${import.meta.env.VITE_API_URL}/api/polls`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contractPollId: createdId,
+          title: newPollTitle,
+          options: newPollOptions,
+          commitEndTime: now + commitDuration,
+          revealEndTime: now + commitDuration + revealDuration,
+          isCommunity: true
+        })
+      });
+
+      onSuccess("Success!", "Community Poll Created Successfully!");
+      setIsCreateModalOpen(false);
+      setNewPollTitle('');
+    } catch (e: any) {
+      console.error("Create Poll Failed:", e);
+      onError("Create Failed", e.message || "Unknown error");
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -1324,6 +1378,82 @@ function ProfileView({ address, now, onSuccess, onError, onLogout }: { address: 
         </div>
         <PremiumStatus />
       </div>
+
+      {/* Create Poll Button for Premium Users */}
+      {isPremium && (
+        <button
+          onClick={() => setIsCreateModalOpen(true)}
+          className="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl shadow-xl shadow-purple-500/20 font-black text-lg transform transition-all active:scale-95 flex items-center justify-center gap-2"
+        >
+          <Sparkles className="animate-pulse" />
+          CREATE COMMUNITY POLL
+        </button>
+      )}
+
+      {/* Create Poll Modal */}
+      <AnimatePresence>
+        {isCreateModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-[2rem] p-6 w-full max-w-md shadow-2xl space-y-4"
+            >
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-display font-black text-gray-800">Create Poll</h3>
+                <button onClick={() => setIsCreateModalOpen(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
+                  <X size={20} className="text-gray-500" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase ml-1">Title / Question</label>
+                  <input
+                    type="text"
+                    value={newPollTitle}
+                    onChange={(e) => setNewPollTitle(e.target.value)}
+                    placeholder="Who will win..."
+                    className="w-full p-4 bg-gray-50 rounded-xl font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-400 uppercase ml-1">Options (Max 4)</label>
+                  {newPollOptions.map((opt, idx) => (
+                    <input
+                      key={idx}
+                      type="text"
+                      value={opt}
+                      onChange={(e) => {
+                        const newOpts = [...newPollOptions];
+                        newOpts[idx] = e.target.value;
+                        setNewPollOptions(newOpts);
+                      }}
+                      className="w-full p-3 bg-gray-50 rounded-xl font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                      placeholder={`Option ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={handleCreatePoll}
+                disabled={isCreating}
+                className="w-full py-4 bg-gray-900 text-white rounded-xl font-black text-lg disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isCreating ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : "LAUNCH POLL 🚀"}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Stats Card */}
       <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-gray-100 grid grid-cols-2 gap-4">
         <div className="text-center">
