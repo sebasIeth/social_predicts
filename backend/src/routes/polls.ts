@@ -8,13 +8,23 @@ const router = express.Router();
 router.post('/', async (req, res) => {
     try {
         const { contractPollId, title, options, commitEndTime, revealEndTime, isCommunity } = req.body;
+
+        const update: any = { title, options, commitEndTime, revealEndTime };
+        if (typeof isCommunity !== 'undefined') {
+            update.isCommunity = isCommunity;
+        }
+
         const poll = await Poll.findOneAndUpdate(
             { contractPollId },
-            { title, options, commitEndTime, revealEndTime, isCommunity: isCommunity || false },
+            {
+                $set: update,
+                $setOnInsert: { isCommunity: (typeof isCommunity !== 'undefined') ? isCommunity : false }
+            },
             { new: true, upsert: true }
         );
         res.json(poll);
     } catch (err: any) {
+        console.error(err);
         res.status(500).send('Server Error');
     }
 });
