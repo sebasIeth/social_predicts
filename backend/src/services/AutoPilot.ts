@@ -3,7 +3,7 @@ import Vote from '../models/Vote';
 import PollModel from '../models/Poll'; // Assuming we sync polls or just use chain
 import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI } from '../constants';
 
-const POLLING_INTERVAL = 60 * 1000; // 1 minute
+const POLLING_INTERVAL = 10 * 1000; // 10 seconds for faster feedback
 
 export class AutoPilotService {
     private provider?: ethers.JsonRpcProvider;
@@ -78,27 +78,25 @@ export class AutoPilotService {
 
         for (const vote of votesToReveal) {
             try {
-                // Check if user is premium
-                const isPremium = await this.contract.isPremium(vote.voterAddress);
+                // Removing Premium Check - AutoPilot for EVERYONE
+                // const isPremium = await this.contract.isPremium(vote.voterAddress);
 
-                if (isPremium) {
-                    console.log(`AutoPilot: Revealing vote for premium user ${vote.voterAddress} on poll ${poll.contractPollId}`);
+                console.log(`AutoPilot: Revealing vote for user ${vote.voterAddress} on poll ${poll.contractPollId}`);
 
-                    const tx = await this.contract.adminRevealVote(
-                        vote.pollId,
-                        vote.voterAddress,
-                        vote.commitmentIndex,
-                        vote.optionIndex,
-                        vote.salt
-                    );
+                const tx = await this.contract.adminRevealVote(
+                    vote.pollId,
+                    vote.voterAddress,
+                    vote.commitmentIndex,
+                    vote.optionIndex,
+                    vote.salt
+                );
 
-                    console.log(`AutoPilot: Reveal tx sent: ${tx.hash}`);
-                    await tx.wait();
+                console.log(`AutoPilot: Reveal tx sent: ${tx.hash}`);
+                await tx.wait();
 
-                    vote.revealed = true;
-                    await vote.save();
-                    console.log(`AutoPilot: Vote revealed for ${vote.voterAddress}`);
-                }
+                vote.revealed = true;
+                await vote.save();
+                console.log(`AutoPilot: Vote revealed for ${vote.voterAddress}`);
             } catch (err: any) {
                 console.error(`AutoPilot: Failed to reveal for ${vote.voterAddress}:`, err.message);
                 if (err.message && err.message.includes("Already revealed")) {
@@ -179,23 +177,21 @@ export class AutoPilotService {
 
         for (const vote of winningVotes) {
             try {
-                const isPremium = await this.contract.isPremium(vote.voterAddress);
-                if (isPremium) {
-                    console.log(`AutoPilot: Claiming reward for premium user ${vote.voterAddress} on poll ${pollId}`);
+                // Removing Premium Check for claiming as well
+                console.log(`AutoPilot: Claiming reward for user ${vote.voterAddress} on poll ${pollId}`);
 
-                    const tx = await this.contract.adminClaimReward(
-                        pollId,
-                        vote.voterAddress,
-                        vote.commitmentIndex
-                    );
+                const tx = await this.contract.adminClaimReward(
+                    pollId,
+                    vote.voterAddress,
+                    vote.commitmentIndex
+                );
 
-                    console.log(`AutoPilot: Claim tx sent: ${tx.hash}`);
-                    await tx.wait();
+                console.log(`AutoPilot: Claim tx sent: ${tx.hash}`);
+                await tx.wait();
 
-                    vote.rewardClaimed = true;
-                    await vote.save();
-                    console.log(`AutoPilot: Reward claimed for ${vote.voterAddress}`);
-                }
+                vote.rewardClaimed = true;
+                await vote.save();
+                console.log(`AutoPilot: Reward claimed for ${vote.voterAddress}`);
             } catch (err: any) {
                 console.error(`AutoPilot: Failed to claim for ${vote.voterAddress}:`, err.message);
                 if (err.message && err.message.includes("Already claimed")) {

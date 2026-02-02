@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { CheckCircle, Sparkles } from 'lucide-react';
 import { useAccount, useSwitchChain, usePublicClient, useBalance, useReadContract, useWriteContract, useWatchContractEvent, useReadContracts } from 'wagmi';
 import { keccak256, encodePacked, formatUnits, pad, toHex, erc20Abi } from 'viem';
-import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI, BASE_USDC_ADDRESS, STAKE_AMOUNT } from '../../constants';
+import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI, BASE_USDC_ADDRESS, STAKE_AMOUNT, TARGET_CHAIN_ID } from '../../constants';
 import { cn } from '../../utils';
 
 interface VotingGridProps {
@@ -26,6 +26,7 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
     const publicClient = usePublicClient();
     const { data: ethBalance } = useBalance({ address });
     const [userVotes, setUserVotes] = useState(0);
+    const [optimisticApproved, setOptimisticApproved] = useState(false);
 
     const fetchUserVotes = async () => {
         if (!address) return;
@@ -75,7 +76,7 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
         }
     });
 
-    const needsApproval = !allowance || allowance < STAKE_AMOUNT;
+    const needsApproval = (!allowance || allowance < STAKE_AMOUNT) && !optimisticApproved;
 
     const handleApprove = async () => {
         if (!address || !publicClient) return;
@@ -83,7 +84,7 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
         try {
             console.log("Switching to Base...");
             if (!isMiniApp) {
-                await switchChainAsync({ chainId: 8453 });
+                await switchChainAsync({ chainId: TARGET_CHAIN_ID });
             }
 
             if (ethBalance && ethBalance.value === 0n) {
@@ -103,6 +104,7 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
 
             console.log("Approval Hash Sent:", hash);
             await publicClient.waitForTransactionReceipt({ hash });
+            setOptimisticApproved(true);
             await refetchAllowance();
             setIsApproving(false);
             onSuccess("Approved!", "You can now submit your vote.");
@@ -120,7 +122,7 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
         try {
             console.log("Switching to Base for Vote...");
             if (!isMiniApp) {
-                await switchChainAsync({ chainId: 8453 });
+                await switchChainAsync({ chainId: TARGET_CHAIN_ID });
             }
 
             if (needsApproval) {

@@ -27,8 +27,13 @@ const PORT = process.env.PORT || 5001;
 
 app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV}`);
+    // Import dynamically to ensure env vars are loaded
+    import('./constants').then(({ ORACLE_POLL_ADDRESS }) => {
+        console.log(`Using OraclePoll Address: ${ORACLE_POLL_ADDRESS}`);
 
-    // Start Auto-Pilot
-    const autoPilot = new AutoPilotService();
-    autoPilot.start();
+        // Start Auto-Pilot
+        const autoPilot = new AutoPilotService();
+        autoPilot.start();
+    });
 });

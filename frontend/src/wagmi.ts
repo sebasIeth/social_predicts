@@ -1,12 +1,13 @@
 import { http, createConfig } from 'wagmi';
-import { base } from 'wagmi/chains';
+import { base, baseSepolia } from 'wagmi/chains';
 import { farcasterMiniApp } from "@farcaster/miniapp-wagmi-connector";
 import { injected, coinbaseWallet } from 'wagmi/connectors';
 
 export const config = createConfig({
-    chains: [base],
+    chains: [base, baseSepolia],
     transports: {
-        [base.id]: http("https://base-mainnet.g.alchemy.com/v2/TRylDDMm2LeRFKSeETLtD")
+        [base.id]: http("https://base-mainnet.g.alchemy.com/v2/TRylDDMm2LeRFKSeETLtD"),
+        [baseSepolia.id]: http("https://base-sepolia.g.alchemy.com/v2/TRylDDMm2LeRFKSeETLtD")
     },
     connectors: [
         farcasterMiniApp(),

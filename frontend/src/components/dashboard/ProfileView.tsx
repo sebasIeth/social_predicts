@@ -23,6 +23,34 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
     const [revealingIndices, setRevealingIndices] = useState<Set<string>>(new Set());
     const publicClient = usePublicClient();
 
+    // Filters & Pagination
+    const [filter, setFilter] = useState<'ALL' | 'OPEN' | 'REVEAL' | 'RESOLVED' | 'WON' | 'LOST'>('ALL');
+    const [page, setPage] = useState(1);
+    const ITEMS_PER_PAGE = 5;
+
+    const filteredHistory = history.filter(item => {
+        const poll = item.pollInfo;
+        const isOpen = now < poll.commitEndTime;
+        const isRevealPhase = now >= poll.commitEndTime && now < poll.revealEndTime;
+        // const hasEnded = now >= poll.revealEndTime;
+        const isResolved = poll.resolved;
+        const isWinner = isResolved && poll.winningOptionIndex === item.optionIndex;
+
+        if (filter === 'ALL') return true;
+        if (filter === 'OPEN') return isOpen;
+        if (filter === 'REVEAL') return isRevealPhase;
+        if (filter === 'RESOLVED') return isResolved;
+        if (filter === 'WON') return isWinner;
+        if (filter === 'LOST') return isResolved && !isWinner;
+        return true;
+    });
+
+    const totalPages = Math.ceil(filteredHistory.length / ITEMS_PER_PAGE);
+    const paginatedHistory = filteredHistory.slice(
+        (page - 1) * ITEMS_PER_PAGE,
+        page * ITEMS_PER_PAGE
+    );
+
     const handleResolve = async (pId: number) => {
         if (!address || !publicClient) return;
         try {
@@ -127,7 +155,9 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
 
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [newPollTitle, setNewPollTitle] = useState('');
-    const [newPollOptions, setNewPollOptions] = useState(['Yes', 'No', 'Maybe', 'Impossible']);
+    const [newPollOptions, setNewPollOptions] = useState(['Yes', 'No']);
+    const [commitDuration, setCommitDuration] = useState(3600); // Default 1 hour
+    const [revealDuration, setRevealDuration] = useState(3600); // Default 1 hour
     const [isCreating, setIsCreating] = useState(false);
     const { writeContractAsync: writeCreatePoll } = useWriteContract();
 
@@ -149,8 +179,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
         }
         setIsCreating(true);
         try {
-            const commitDuration = 86400;
-            const revealDuration = 3600;
+            // Using state values for duration
 
             // 1. Create on-chain
             const hash = await writeCreatePoll({
@@ -443,7 +472,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                             initial={{ scale: 0.9, y: 20 }}
                             animate={{ scale: 1, y: 0 }}
                             exit={{ scale: 0.9, y: 20 }}
-                            className="bg-white rounded-[2rem] p-6 w-full max-w-md shadow-2xl space-y-4"
+                            className="bg-white rounded-[2rem] p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto scrollbar-hide"
                         >
                             <div className="flex justify-between items-center">
                                 <h3 className="text-xl font-display font-black text-gray-800">Create Poll</h3>
@@ -452,7 +481,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                                 </button>
                             </div>
 
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 <div>
                                     <label className="text-xs font-bold text-gray-400 uppercase ml-1">Title / Question</label>
                                     <input
@@ -460,33 +489,110 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                                         value={newPollTitle}
                                         onChange={(e) => setNewPollTitle(e.target.value)}
                                         placeholder="Who will win..."
-                                        className="w-full p-4 bg-gray-50 rounded-xl font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                        className="w-full p-4 bg-gray-50 rounded-xl font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500 mt-1"
                                     />
                                 </div>
 
+                                {/* Dynamic Options */}
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-400 uppercase ml-1">Options (Max 4)</label>
-                                    {newPollOptions.map((opt, idx) => (
-                                        <input
-                                            key={idx}
-                                            type="text"
-                                            value={opt}
-                                            onChange={(e) => {
-                                                const newOpts = [...newPollOptions];
-                                                newOpts[idx] = e.target.value;
-                                                setNewPollOptions(newOpts);
-                                            }}
-                                            className="w-full p-3 bg-gray-50 rounded-xl font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
-                                            placeholder={`Option ${idx + 1}`}
-                                        />
-                                    ))}
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs font-bold text-gray-400 uppercase ml-1">Options (Max 5)</label>
+                                        {newPollOptions.length < 5 && (
+                                            <button
+                                                onClick={() => setNewPollOptions([...newPollOptions, ''])}
+                                                className="text-[10px] font-black bg-gray-100 text-gray-600 px-2 py-1 rounded-lg hover:bg-gray-200"
+                                            >
+                                                + ADD OPTION
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="space-y-2">
+                                        {newPollOptions.map((opt, idx) => (
+                                            <div key={idx} className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={opt}
+                                                    onChange={(e) => {
+                                                        const newOpts = [...newPollOptions];
+                                                        newOpts[idx] = e.target.value;
+                                                        setNewPollOptions(newOpts);
+                                                    }}
+                                                    className="flex-1 p-3 bg-gray-50 rounded-xl font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                                                    placeholder={`Option ${idx + 1}`}
+                                                />
+                                                {newPollOptions.length > 2 && (
+                                                    <button
+                                                        onClick={() => {
+                                                            const newOpts = newPollOptions.filter((_, i) => i !== idx);
+                                                            setNewPollOptions(newOpts);
+                                                        }}
+                                                        className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100"
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
+
+                                {/* Time Sliders */}
+                                <div className="space-y-4 pt-2">
+                                    {/* Commit Duration Slider */}
+                                    <div>
+                                        <div className="flex justify-between items-center text-xs font-bold text-gray-500 mb-2">
+                                            <span className="uppercase">Voting Duration</span>
+                                            <div className="text-right">
+                                                <div className="text-candy-purple">{Math.floor(commitDuration / 60)} mins</div>
+                                                <div className="text-[10px] text-gray-400 opacity-60">{(commitDuration / 3600).toFixed(1)}h</div>
+                                            </div>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="300"
+                                            max="86400"
+                                            step="300"
+                                            value={commitDuration}
+                                            onChange={(e) => setCommitDuration(Number(e.target.value))}
+                                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-candy-purple"
+                                        />
+                                        <div className="flex justify-between text-[10px] text-gray-400 font-bold mt-1">
+                                            <span>5m</span>
+                                            <span>24h</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Reveal Duration Slider */}
+                                    <div>
+                                        <div className="flex justify-between items-center text-xs font-bold text-gray-500 mb-2">
+                                            <span className="uppercase">Reveal Duration</span>
+                                            <div className="text-right">
+                                                <div className="text-candy-yellow">{Math.floor(revealDuration / 60)} mins</div>
+                                                <div className="text-[10px] text-gray-400 opacity-60">{(revealDuration / 3600).toFixed(1)}h</div>
+                                            </div>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="300"
+                                            max="86400"
+                                            step="300"
+                                            value={revealDuration}
+                                            onChange={(e) => setRevealDuration(Number(e.target.value))}
+                                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-candy-yellow"
+                                        />
+                                        <div className="flex justify-between text-[10px] text-gray-400 font-bold mt-1">
+                                            <span>5m</span>
+                                            <span>24h</span>
+                                        </div>
+                                    </div>
+                                </div>
+
                             </div>
 
                             <button
                                 onClick={handleCreatePoll}
                                 disabled={isCreating}
-                                className="w-full py-4 bg-gray-900 text-white rounded-xl font-black text-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                                className="w-full py-4 bg-gray-900 text-white rounded-xl font-black text-lg disabled:opacity-50 flex items-center justify-center gap-2 mt-4"
                             >
                                 {isCreating ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : "LAUNCH POLL 🚀"}
                             </button>
@@ -518,9 +624,29 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
 
             <h3 className="text-lg font-display font-bold text-gray-800 px-2">Voting History</h3>
 
+            {/* Filters */}
+            <div className="flex gap-2 overflow-x-auto px-2 pb-2 scrollbar-hide">
+                {(['ALL', 'OPEN', 'REVEAL', 'RESOLVED', 'WON', 'LOST'] as const).map((f) => (
+                    <button
+                        key={f}
+                        onClick={() => { setFilter(f); setPage(1); }}
+                        className={cn(
+                            "px-3 py-1 rounded-full text-[10px] font-bold transition-colors whitespace-nowrap",
+                            filter === f ? "bg-black text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                        )}
+                    >
+                        {f}
+                    </button>
+                ))}
+            </div>
+
             <div className="space-y-4">
-                {history.length === 0 && <p className="text-center py-10 text-gray-400 font-bold">No votes recorded yet.</p>}
-                {history.map((item, idx) => {
+                {paginatedHistory.length === 0 && (
+                    <p className="text-center py-10 text-gray-400 font-bold">
+                        {history.length === 0 ? "No votes recorded yet." : "No votes match filter."}
+                    </p>
+                )}
+                {paginatedHistory.map((item, idx) => {
                     const poll = item.pollInfo;
                     const isOpen = now < poll.commitEndTime;
                     const isRevealPhase = now >= poll.commitEndTime && now < poll.revealEndTime;
@@ -531,16 +657,32 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                     const revealKey = `${poll.contractPollId}-${item.commitmentIndex}`;
                     const isRevealing = revealingIndices.has(revealKey);
 
+                    // Format Date
+                    const voteDate = new Date(item.createdAt || Date.now());
+                    const dateStr = voteDate.toLocaleString(undefined, {
+                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                    });
+
                     return (
                         <div key={idx} className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col gap-4">
+
+                            {/* Header: ID + Time */}
+                            <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                <span>POLL #{poll.contractPollId}</span>
+                                <span>{dateStr}</span>
+                            </div>
+
                             <div className="flex justify-between items-start">
                                 <div className="flex-1">
                                     <h4 className="font-bold text-gray-800 leading-tight mb-2 line-clamp-2">
                                         {poll.title}
                                     </h4>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
                                         <span className="px-2 py-0.5 bg-gray-100 rounded text-[10px] font-black text-gray-500 uppercase">
-                                            Voted: {poll.options[item.optionIndex]}
+                                            Your Pick: {poll.options[item.optionIndex]}
+                                        </span>
+                                        <span className="px-2 py-0.5 bg-gray-100 rounded text-[10px] font-black text-gray-500 uppercase">
+                                            Stake: 1000 USDC
                                         </span>
                                         <span className={cn(
                                             "text-[10px] font-black uppercase px-2 py-0.5 rounded",
@@ -548,11 +690,16 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                                                 (isOpen ? "bg-green-100 text-green-600" :
                                                     (isRevealPhase ? "bg-yellow-100 text-yellow-600" : "bg-gray-200 text-gray-500"))
                                         )}>
-                                            {isResolved ? (isWinner ? "WINNER!" : "LOST") :
+                                            {isResolved ? (isWinner ? "WON!" : "LOST") :
                                                 (isOpen ? "OPEN" :
                                                     (isRevealPhase ? "REVEAL PHASE" : "PENDING RESOLUTION"))}
                                         </span>
                                     </div>
+                                    {isResolved && (
+                                        <div className="mt-2 text-[10px] font-bold text-gray-400">
+                                            Winner: <span className="text-gray-600">{poll.options[poll.winningOptionIndex]}</span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -602,6 +749,29 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                         </div>
                     );
                 })}
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                    <div className="flex justify-center items-center gap-4 py-4">
+                        <button
+                            disabled={page === 1}
+                            onClick={() => setPage(p => Math.max(1, p - 1))}
+                            className="text-xs font-bold text-gray-400 disabled:opacity-30 hover:text-gray-800"
+                        >
+                            Previous
+                        </button>
+                        <span className="text-xs font-black text-gray-300">
+                            P. {page} / {totalPages}
+                        </span>
+                        <button
+                            disabled={page === totalPages}
+                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                            className="text-xs font-bold text-gray-400 disabled:opacity-30 hover:text-gray-800"
+                        >
+                            Next
+                        </button>
+                    </div>
+                )}
             </div>
         </motion.div>
     );

@@ -115,4 +115,37 @@ router.get('/:address/active-reveals', async (req, res) => {
     }
 });
 
+// @route   GET /api/votes/recent
+// @desc    Get recent votes globally
+router.get('/recent', async (req, res) => {
+    try {
+        const votes = await Vote.aggregate([
+            { $sort: { timestamp: -1 } },
+            { $limit: 20 },
+            {
+                $lookup: {
+                    from: 'polls',
+                    localField: 'pollId',
+                    foreignField: 'contractPollId',
+                    as: 'pollInfo'
+                }
+            },
+            { $unwind: { path: '$pollInfo', preserveNullAndEmptyArrays: true } },
+            {
+                $project: {
+                    voterAddress: 1,
+                    optionIndex: 1,
+                    timestamp: 1,
+                    pollTitle: '$pollInfo.title',
+                    pollOptions: '$pollInfo.options'
+                }
+            }
+        ]);
+        res.json(votes);
+    } catch (err: any) {
+        console.error("Error fetching recent votes:", err);
+        res.status(500).send("Server Error");
+    }
+});
+
 export default router;

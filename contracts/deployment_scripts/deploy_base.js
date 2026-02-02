@@ -7,7 +7,12 @@ async function main() {
 
     // Base Mainnet USDC Address
     // https://basescan.org/token/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
-    const BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+    let BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+
+    if (hre.network.name === "base-sepolia") {
+        // Base Sepolia USDC Address
+        BASE_USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+    }
 
     const OraclePoll = await hre.ethers.getContractFactory("OraclePoll");
     const oraclePoll = await OraclePoll.deploy(BASE_USDC_ADDRESS);
