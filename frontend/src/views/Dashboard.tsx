@@ -40,17 +40,17 @@ export function Dashboard() {
 
         const init = async () => {
             // Check if running in Farcaster
-            if (typeof window !== 'undefined' && (window as any).farcaster) {
-                setIsMiniApp(true);
-                try {
-                    await sdk.actions.ready();
-                    const context = await sdk.context;
-                    if (context?.user) {
-                        setUsername(context.user.displayName || context.user.username || null);
-                    }
-                } catch (e) {
-                    console.error("Farcaster SDK Error:", e);
+            try {
+                // Always attempt to initialize SDK in case we are in a frame
+                await sdk.actions.ready();
+                const context = await sdk.context;
+                if (context?.user) {
+                    setUsername(context.user.displayName || context.user.username || null);
+                    setIsMiniApp(true); // Force miniapp mode if we get context
                 }
+            } catch (e) {
+                console.error("Farcaster SDK Error:", e);
+                // Fallback to false if not in frame? No, keep existing logic.
             }
         };
         init();
