@@ -27,6 +27,27 @@ router.post('/record-win', async (req, res) => {
     }
 });
 
+// @route   POST /api/users/update
+// @desc    Update user alias/profile
+router.post('/update', async (req, res) => {
+    try {
+        const { walletAddress, alias } = req.body;
+        if (!walletAddress) {
+            return res.status(400).json({ msg: 'Wallet address required' });
+        }
+
+        const user = await User.findOneAndUpdate(
+            { walletAddress },
+            { $set: { alias, lastActive: new Date() } },
+            { new: true, upsert: true }
+        );
+        res.json(user);
+    } catch (err: any) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+});
+
 // @route   GET /api/users/leaderboard
 // @desc    Get top users by wins + specific user rank
 router.get('/leaderboard', async (req, res) => {
@@ -38,6 +59,7 @@ router.get('/leaderboard', async (req, res) => {
 
         const formatUser = (user: any) => ({
             address: user.walletAddress,
+            alias: user.alias || user.walletAddress, // Fallback to address
             gamesPlayed: user.gamesPlayed,
             gamesWon: user.gamesWon,
             winRate: user.gamesPlayed > 0 ? ((user.gamesWon / user.gamesPlayed) * 100).toFixed(1) : 0

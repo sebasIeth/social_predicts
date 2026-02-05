@@ -124,7 +124,7 @@ function LeaderboardRow({ user, index }: { user: any, index: number }) {
                 </div>
                 <div>
                     <p className="font-bold text-gray-800 text-sm">
-                        {user.address.slice(0, 6)}...{user.address.slice(-4)}
+                        {user.alias.startsWith('0x') ? `${user.alias.slice(0, 6)}...${user.alias.slice(-4)}` : user.alias}
                         {index === 0 && " 👑"}
                     </p>
                     <p className="text-xs text-gray-400 font-medium">

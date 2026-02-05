@@ -45,8 +45,18 @@ export function Dashboard() {
                 await sdk.actions.ready();
                 const context = await sdk.context;
                 if (context?.user) {
-                    setUsername(context.user.displayName || context.user.username || null);
-                    setIsMiniApp(true); // Force miniapp mode if we get context
+                    const name = context.user.displayName || context.user.username || null;
+                    setUsername(name);
+                    setIsMiniApp(true);
+
+                    // Sync Alias to Backend if we have an address
+                    if (address && name) {
+                        fetch(`${import.meta.env.VITE_API_URL}/api/users/update`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ walletAddress: address, alias: name })
+                        }).catch(err => console.error("Failed to sync alias", err));
+                    }
                 }
             } catch (e) {
                 console.error("Farcaster SDK Error:", e);
