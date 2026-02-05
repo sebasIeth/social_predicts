@@ -46,7 +46,7 @@ export function Dashboard() {
                     await sdk.actions.ready();
                     const context = await sdk.context;
                     if (context?.user) {
-                        setUsername(context.user.username || context.user.displayName || null);
+                        setUsername(context.user.displayName || context.user.username || null);
                     }
                 } catch (e) {
                     console.error("Farcaster SDK Error:", e);
@@ -288,7 +288,7 @@ export function Dashboard() {
 
                             {/* Hero Card: The Question */}
                             {/* Hide Hero if Loading List OR if No Polls & Official (Empty State) */}
-                            {activeTab !== 'LEADERBOARD' && activeTab !== 'PROFILE' && activeTab !== 'MYPOLLS' && !(pollType === 'community' && selectedPollId === null) && (!isLoadingList && pollData) && (
+                            {activeTab !== 'LEADERBOARD' && activeTab !== 'PROFILE' && activeTab !== 'MYPOLLS' && !(pollType === 'community' && selectedPollId === null) && activePollId >= 0 && (!isLoadingList && pollData) && (
                                 <motion.div
                                     layout
                                     className="bg-white rounded-[2.5rem] p-8 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] border-b-8 border-gray-100 relative overflow-hidden"
@@ -369,7 +369,7 @@ export function Dashboard() {
                                         {/* Community / Official Toggle */}
                                         <div className="flex p-1 bg-gray-100 rounded-2xl mb-4">
                                             <button
-                                                onClick={() => { setPollType('official'); setSelectedPollId(null); }}
+                                                onClick={() => { setPollType('official'); setSelectedPollId(null); setPollsList([]); }}
                                                 className={cn(
                                                     "flex-1 py-3 rounded-xl font-bold text-sm transition-all",
                                                     pollType === 'official' ? "bg-white text-gray-800 shadow-sm" : "text-gray-400 hover:text-gray-600"
@@ -378,7 +378,7 @@ export function Dashboard() {
                                                 OFFICIAL
                                             </button>
                                             <button
-                                                onClick={() => { setPollType('community'); setSelectedPollId(null); }}
+                                                onClick={() => { setPollType('community'); setSelectedPollId(null); setPollsList([]); }}
                                                 className={cn(
                                                     "flex-1 py-3 rounded-xl font-bold text-sm transition-all",
                                                     pollType === 'community' ? "bg-white text-gray-800 shadow-sm" : "text-gray-400 hover:text-gray-600"
