@@ -7,9 +7,9 @@ const router = express.Router();
 // @desc    Create a new poll
 router.post('/', async (req, res) => {
     try {
-        const { contractPollId, title, options, commitEndTime, revealEndTime, isCommunity } = req.body;
+        const { contractPollId, title, options, commitEndTime, revealEndTime, isCommunity, creator } = req.body;
 
-        const update: any = { title, options, commitEndTime, revealEndTime };
+        const update: any = { title, options, commitEndTime, revealEndTime, creator };
         if (typeof isCommunity !== 'undefined') {
             update.isCommunity = isCommunity;
         }
@@ -31,6 +31,13 @@ router.post('/', async (req, res) => {
     }
 });
 
+// @route   POST /api/polls/sync
+// @desc    Trigger sync (Placeholder)
+router.post('/sync', async (req, res) => {
+    // Placeholder for manual sync trigger
+    res.json({ msg: 'Sync triggered' });
+});
+
 // @route   GET /api/polls
 // @desc    Get all polls
 router.get('/', async (req, res) => {
@@ -42,6 +49,8 @@ router.get('/', async (req, res) => {
             query = { isCommunity: true };
         } else if (type === 'official') {
             query = { isCommunity: false };
+        } else if (type === 'mypolls' && req.query.creator) {
+            query = { creator: req.query.creator };
         }
 
         const polls = await Poll.find(query).sort({ createdAt: -1 });

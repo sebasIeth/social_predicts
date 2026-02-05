@@ -1,6 +1,7 @@
 import express from 'express';
 import Vote from '../models/Vote';
 import User from '../models/User';
+import Poll from '../models/Poll';
 
 const router = express.Router();
 
@@ -47,7 +48,7 @@ router.get('/user/:address', async (req, res) => {
             { $match: query },
             {
                 $lookup: {
-                    from: 'polls',
+                    from: Poll.collection.name,
                     localField: 'pollId',
                     foreignField: 'contractPollId',
                     as: 'pollInfo'
@@ -83,7 +84,7 @@ router.get('/:address/active-reveals', async (req, res) => {
             },
             {
                 $lookup: {
-                    from: 'polls',
+                    from: Poll.collection.name,
                     localField: 'pollId',
                     foreignField: 'contractPollId',
                     as: 'pollInfo'
@@ -124,7 +125,7 @@ router.get('/recent', async (req, res) => {
             { $limit: 20 },
             {
                 $lookup: {
-                    from: 'polls',
+                    from: Poll.collection.name,
                     localField: 'pollId',
                     foreignField: 'contractPollId',
                     as: 'pollInfo'

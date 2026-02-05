@@ -8,6 +8,7 @@ export interface IPoll extends Document {
     revealEndTime: number;
     createdAt: Date;
     isCommunity: boolean;
+    creator: string;
 }
 
 import { getCollectionName } from '../utils';
@@ -19,7 +20,8 @@ const PollSchema: Schema = new Schema({
     commitEndTime: { type: Number, required: true },
     revealEndTime: { type: Number, required: true },
     createdAt: { type: Date, default: Date.now },
-    isCommunity: { type: Boolean, default: false }
+    isCommunity: { type: Boolean, default: false },
+    creator: { type: String, required: false }
 });
 
 export default mongoose.model<IPoll>(getCollectionName('Poll'), PollSchema);

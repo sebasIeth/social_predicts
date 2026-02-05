@@ -4,6 +4,11 @@ import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { config } from './wagmi'
 import './index.css'
+
+// Fix for BigInt serialization
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
 import App from './App.tsx'
 import { OpenfortProviderWrapper } from "./providers/OpenfortProvider.tsx"
 

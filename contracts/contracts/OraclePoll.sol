@@ -20,6 +20,8 @@ contract OraclePoll {
         uint256 totalStake;
         bool resolved;
         uint256 winningOptionIndex;
+        address creator;
+        uint256 rewardPerWinner;
     }
 
     // pollId => voter => array of commitment hashes
@@ -44,6 +46,7 @@ contract OraclePoll {
     uint256 public constant COST_7_DAYS = 100;   // 0.0001 USDC
     uint256 public constant COST_30_DAYS = 300;  // 0.0003 USDC
     address public admin;
+    address public feeCollector;
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "Not admin");
@@ -54,9 +57,10 @@ contract OraclePoll {
         return premiumExpiry[_user] > block.timestamp;
     }
 
-    constructor(address _usdToken) {
+    constructor(address _usdToken, address _feeCollector) {
         usdToken = IERC20(_usdToken);
         admin = msg.sender;
+        feeCollector = _feeCollector;
     }
 
     function buyPremium(uint256 _days) external {
@@ -69,7 +73,7 @@ contract OraclePoll {
             revert("Invalid duration: Use 7 or 30");
         }
 
-        usdToken.safeTransferFrom(msg.sender, admin, cost);
+        usdToken.safeTransferFrom(msg.sender, feeCollector, cost);
         
         // Extend if active, otherwise start from now
         if (premiumExpiry[msg.sender] > block.timestamp) {
@@ -90,6 +94,7 @@ contract OraclePoll {
         p.options = _options;
         p.commitEndTime = block.timestamp + _commitDuration;
         p.revealEndTime = block.timestamp + _commitDuration + _revealDuration;
+        p.creator = msg.sender;
         
         emit PollCreated(pollId, _question, p.commitEndTime);
     }
@@ -146,6 +151,30 @@ contract OraclePoll {
         if (winningCount > 0 && !tie) {
             p.winningOptionIndex = winningIndex;
             p.resolved = true;
+
+            // Fee Distribution
+            uint256 totalStake = p.totalStake;
+            uint256 platformFee;
+            uint256 creatorFee;
+            uint256 remainingStake;
+
+            if (p.creator == admin) {
+                // Official Poll: 30% to Admin
+                platformFee = (totalStake * 30) / 100;
+                remainingStake = totalStake - platformFee;
+                usdToken.safeTransfer(feeCollector, platformFee);
+            } else {
+                // Community Poll: 5% to Admin, 25% to Creator
+                platformFee = (totalStake * 5) / 100;
+                creatorFee = (totalStake * 25) / 100;
+                remainingStake = totalStake - platformFee - creatorFee;
+                
+                usdToken.safeTransfer(feeCollector, platformFee);
+                usdToken.safeTransfer(p.creator, creatorFee);
+            }
+
+            p.rewardPerWinner = remainingStake / winningCount;
+
             emit PollResolved(_pollId, winningIndex, p.totalStake, winningCount);
         } else {
              // Handle tie
@@ -158,10 +187,8 @@ contract OraclePoll {
         require(votes[_pollId][msg.sender][_commitmentIndex] == p.winningOptionIndex + 1, "You did not win at this index");
         require(!rewardClaimed[_pollId][msg.sender][_commitmentIndex], "Already claimed");
 
-        uint256 winnerCount = optionTallies[_pollId][p.winningOptionIndex];
-        require(winnerCount > 0, "No winners? Error.");
-        
-        uint256 reward = p.totalStake / winnerCount;
+        // Use stored reward per winner
+        uint256 reward = p.rewardPerWinner;
 
         rewardClaimed[_pollId][msg.sender][_commitmentIndex] = true;
         usdToken.safeTransfer(msg.sender, reward);
@@ -196,10 +223,8 @@ contract OraclePoll {
         require(votes[_pollId][_voter][_commitmentIndex] == p.winningOptionIndex + 1, "User did not win");
         require(!rewardClaimed[_pollId][_voter][_commitmentIndex], "Already claimed");
 
-        uint256 winnerCount = optionTallies[_pollId][p.winningOptionIndex];
-        require(winnerCount > 0, "No winners? Error.");
-        
-        uint256 reward = p.totalStake / winnerCount;
+        // Use stored reward per winner
+        uint256 reward = p.rewardPerWinner;
 
         rewardClaimed[_pollId][_voter][_commitmentIndex] = true;
         usdToken.safeTransfer(_voter, reward);

@@ -116,7 +116,8 @@ export function CreatePollModal({ isOpen, onClose, onSuccess, onError }: CreateP
                         options: options,
                         commitEndTime: Math.floor(Date.now() / 1000) + Number(commitSeconds),
                         revealEndTime: Math.floor(Date.now() / 1000) + Number(commitSeconds) + Number(revealSeconds),
-                        isCommunity: isCommunity
+                        isCommunity: isCommunity,
+                        creator: address
                     })
                 });
 

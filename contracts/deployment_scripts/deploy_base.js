@@ -14,13 +14,15 @@ async function main() {
         BASE_USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
     }
 
+    const FEE_COLLECTOR_ADDRESS = "0x58C9eBB118217c3f9Ed3B11ee26dD810397c7b79";
+
     const OraclePoll = await hre.ethers.getContractFactory("OraclePoll");
-    const oraclePoll = await OraclePoll.deploy(BASE_USDC_ADDRESS);
+    const oraclePoll = await OraclePoll.deploy(BASE_USDC_ADDRESS, FEE_COLLECTOR_ADDRESS);
 
     await oraclePoll.waitForDeployment();
 
     console.log(
-        `OraclePoll deployed to ${oraclePoll.target} with USDC address ${BASE_USDC_ADDRESS}`
+        `OraclePoll deployed to ${oraclePoll.target} with USDC address ${BASE_USDC_ADDRESS} and Fee Collector ${FEE_COLLECTOR_ADDRESS}`
     );
 }
 

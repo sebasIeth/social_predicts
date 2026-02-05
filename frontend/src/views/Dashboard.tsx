@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { OpenfortButton, useSignOut } from "@openfort/react";
-import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, Ghost, Crown } from 'lucide-react';
+import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, Ghost, Crown, LayoutDashboard } from 'lucide-react';
 import { useAccount, useConnect, useDisconnect, useReadContract, useWatchContractEvent } from 'wagmi';
 import { injected } from 'wagmi/connectors';
 import { formatUnits } from 'viem';
@@ -19,10 +19,11 @@ import { RevealZone } from '../components/dashboard/RevealZone';
 import { LeaderboardView } from '../components/dashboard/LeaderboardView';
 import { ProfileView } from '../components/dashboard/ProfileView';
 import { CreatePollModal } from '../components/dashboard/CreatePollModal';
+import { MyPollsView } from '../components/dashboard/MyPollsView';
 
 
 export function Dashboard() {
-    const [activeTab, setActiveTab] = useState<'VOTE' | 'REVEAL' | 'LEADERBOARD' | 'PROFILE'>('VOTE');
+    const [activeTab, setActiveTab] = useState<'VOTE' | 'REVEAL' | 'LEADERBOARD' | 'PROFILE' | 'MYPOLLS'>('VOTE');
     const { address, isConnected, connector } = useAccount();
     const [isMiniApp, setIsMiniApp] = useState(connector?.id === 'farcaster');
     const [username, setUsername] = useState<string | null>(null);
@@ -130,7 +131,7 @@ export function Dashboard() {
     let activePollId = -1;
     if (selectedPollId !== null) {
         activePollId = selectedPollId;
-    } else if (pollType === 'official' && pollsList.length > 0) {
+    } else if (pollType === 'official' && pollsList.length > 0 && pollsList[0].isCommunity === false) {
         // Automatically show the latest official poll
         activePollId = pollsList[0].contractPollId;
     }
@@ -287,7 +288,7 @@ export function Dashboard() {
 
                             {/* Hero Card: The Question */}
                             {/* Hide Hero if Loading List OR if No Polls & Official (Empty State) */}
-                            {activeTab !== 'LEADERBOARD' && activeTab !== 'PROFILE' && !(pollType === 'community' && selectedPollId === null) && (!isLoadingList && pollData) && (
+                            {activeTab !== 'LEADERBOARD' && activeTab !== 'PROFILE' && activeTab !== 'MYPOLLS' && !(pollType === 'community' && selectedPollId === null) && (!isLoadingList && pollData) && (
                                 <motion.div
                                     layout
                                     className="bg-white rounded-[2.5rem] p-8 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] border-b-8 border-gray-100 relative overflow-hidden"
@@ -343,6 +344,18 @@ export function Dashboard() {
 
                             {/* Action Area */}
                             <AnimatePresence mode="wait">
+                                {activeTab === 'MYPOLLS' && (
+                                    <motion.div
+                                        key="mypolls"
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.95 }}
+                                        className="min-h-full"
+                                    >
+                                        <MyPollsView />
+                                    </motion.div>
+                                )}
+
                                 {activeTab === 'VOTE' && (
                                     <motion.div
                                         key="vote"
@@ -723,6 +736,15 @@ export function Dashboard() {
                         label="Ranks"
                         color="bg-candy-purple"
                     />
+                    {isPremium && (
+                        <NavButton
+                            active={activeTab === 'MYPOLLS'}
+                            onClick={() => setActiveTab('MYPOLLS')}
+                            icon={<LayoutDashboard />}
+                            label="Create"
+                            color="bg-emerald-500"
+                        />
+                    )}
                     <NavButton
                         active={activeTab === 'PROFILE'}
                         onClick={() => setActiveTab('PROFILE')}

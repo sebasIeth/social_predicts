@@ -31,7 +31,10 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
 
     const filteredHistory = history.filter(item => {
         const poll = item.pollInfo;
+        if (!poll) return false;
+
         const isOpen = now < poll.commitEndTime;
+
         const isRevealPhase = now >= poll.commitEndTime && now < poll.revealEndTime;
         // const hasEnded = now >= poll.revealEndTime;
         const isResolved = poll.resolved;
@@ -174,6 +177,8 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
 
         const pollsToCheck = items.filter(item => {
             const poll = item.pollInfo;
+            if (!poll) return false;
+
             // Check if stuck (ended but not resolved) OR won (need to check claim status)
             const stuck = (now >= poll.revealEndTime && !poll.resolved);
             const won = (poll.resolved && poll.winningOptionIndex === item.optionIndex);
