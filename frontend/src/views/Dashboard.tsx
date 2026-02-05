@@ -602,7 +602,7 @@ export function Dashboard() {
                                                                     <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
                                                                         <Sparkles className="w-4 h-4 text-gray-400" />
                                                                     </div>
-                                                                    <h3 className="font-display font-bold text-gray-800 text-lg">Past Polls</h3>
+                                                                    <h3 className="font-display font-bold text-gray-800 text-lg">More Polls</h3>
                                                                 </div>
 
                                                                 {paginatedHistoryPolls.map((p) => {
@@ -617,9 +617,13 @@ export function Dashboard() {
                                                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50 px-2 py-1 rounded-lg">
                                                                                     #{p.contractPollId}
                                                                                 </span>
-                                                                                {isExpired && (
-                                                                                    <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400 uppercase">
+                                                                                {isExpired ? (
+                                                                                    <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-2 py-1 rounded-lg">
                                                                                         <CheckCircle size={10} /> Ended
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span className="flex items-center gap-1 text-[10px] font-bold text-green-600 uppercase bg-green-100 px-2 py-1 rounded-lg animate-pulse">
+                                                                                        <Zap size={10} /> Live
                                                                                     </span>
                                                                                 )}
                                                                             </div>

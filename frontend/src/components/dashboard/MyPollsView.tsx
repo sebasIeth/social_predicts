@@ -203,7 +203,7 @@ function MyPollCard({ poll, initialOnChainData }: { poll: any, initialOnChainDat
 
                 <div className="flex flex-col items-end gap-1">
                     <div className="flex items-center gap-2">
-                        <span className="font-bold text-gray-400">Earnings:</span>
+                        <span className="font-bold text-gray-400">Earnings (25%):</span>
                         <span className="font-black text-green-600 bg-green-50 px-2 py-1 rounded-lg">
                             {earnings > 0 ? `+${earnings.toFixed(4)} USDC` : '0.0000 USDC'}
                         </span>
