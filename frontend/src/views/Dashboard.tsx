@@ -25,6 +25,7 @@ export function Dashboard() {
     const [activeTab, setActiveTab] = useState<'VOTE' | 'REVEAL' | 'LEADERBOARD' | 'PROFILE'>('VOTE');
     const { address, isConnected, connector } = useAccount();
     const [isMiniApp, setIsMiniApp] = useState(connector?.id === 'farcaster');
+    const [username, setUsername] = useState<string | null>(null);
     const { connect } = useConnect();
     const { disconnect } = useDisconnect();
     const { signOut } = useSignOut();
@@ -42,6 +43,10 @@ export function Dashboard() {
                 setIsMiniApp(true);
                 try {
                     await sdk.actions.ready();
+                    const context = await sdk.context;
+                    if (context?.user) {
+                        setUsername(context.user.username || context.user.displayName || null);
+                    }
                 } catch (e) {
                     console.error("Farcaster SDK Error:", e);
                 }
@@ -256,13 +261,12 @@ export function Dashboard() {
                                         </button>
                                     ) : (
                                         <button
-                                            onClick={() => disconnect()}
                                             className={cn(
                                                 "px-4 py-2 bg-white border-2 border-gray-100 rounded-2xl text-xs font-bold text-gray-500 transition-colors",
-                                                "hover:bg-gray-50 cursor-pointer"
+                                                "cursor-default"
                                             )}
                                         >
-                                            {address?.slice(0, 6)}...{address?.slice(-4)}
+                                            {username ? `@${username}` : (address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connected')}
                                         </button>
                                     ))}
                             </div>

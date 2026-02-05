@@ -45,9 +45,19 @@ export function LeaderboardView() {
             exit={{ opacity: 0, y: -10 }}
             className="space-y-4 relative pb-20"
         >
-            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-[2rem] p-8 text-white shadow-lg mb-6">
-                <h2 className="text-3xl font-display font-black mb-2">Leaderboard 🏆</h2>
-                <p className="text-purple-100 font-medium opacity-80">Top 10 Predictors</p>
+            <div className="relative overflow-hidden bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] rounded-[2.5rem] p-8 text-white shadow-xl shadow-purple-500/20 mb-8 border border-white/10">
+                {/* Decorative Background Elements */}
+                <div className="absolute -right-10 -top-10 text-white/10 transform rotate-12">
+                    <Trophy size={180} />
+                </div>
+                <div className="absolute top-1/2 right-10 w-32 h-32 bg-purple-400/30 blur-3xl rounded-full"></div>
+
+                <div className="relative z-10">
+                    <h2 className="text-4xl font-display font-black mb-2 flex items-center gap-3 drop-shadow-sm">
+                        Leaderboard <Trophy className="text-yellow-400 drop-shadow-md fill-yellow-400/20" size={32} />
+                    </h2>
+                    <p className="text-purple-100 font-bold text-lg opacity-90 tracking-wide">Top 10 Predictors</p>
+                </div>
             </div>
 
             <div className="space-y-3">
