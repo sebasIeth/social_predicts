@@ -11,6 +11,8 @@ export interface IVote extends Document {
     rewardClaimed?: boolean;
 }
 
+import { getCollectionName } from '../utils';
+
 const VoteSchema: Schema = new Schema({
     pollId: { type: Number, required: true },
     voterAddress: { type: String, required: true },
@@ -25,4 +27,4 @@ const VoteSchema: Schema = new Schema({
 // Multiple votes per address allowed
 // Removed unique index
 
-export default mongoose.model<IVote>('Vote', VoteSchema);
+export default mongoose.model<IVote>(getCollectionName('Vote'), VoteSchema);

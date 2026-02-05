@@ -3,9 +3,8 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { OpenfortButton, useSignOut } from "@openfort/react";
-import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle } from 'lucide-react';
-import { useAccount, useConnect, useDisconnect, useReadContract, useWatchContractEvent, useWriteContract, usePublicClient } from 'wagmi';
-import { parseEventLogs } from 'viem';
+import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, Ghost, Crown } from 'lucide-react';
+import { useAccount, useConnect, useDisconnect, useReadContract, useWatchContractEvent } from 'wagmi';
 import { injected } from 'wagmi/connectors';
 import { formatUnits } from 'viem';
 
@@ -19,6 +18,7 @@ import { VotingGrid } from '../components/dashboard/VotingGrid';
 import { RevealZone } from '../components/dashboard/RevealZone';
 import { LeaderboardView } from '../components/dashboard/LeaderboardView';
 import { ProfileView } from '../components/dashboard/ProfileView';
+import { CreatePollModal } from '../components/dashboard/CreatePollModal';
 
 
 export function Dashboard() {
@@ -30,7 +30,6 @@ export function Dashboard() {
     const { signOut } = useSignOut();
 
     const [feedbackModal, setFeedbackModal] = useState<{ type: 'success' | 'error', title: string, message: string, isOpen: boolean } | null>(null);
-    const publicClient = usePublicClient();
 
     useEffect(() => {
         if (connector?.id === 'farcaster') {
@@ -62,12 +61,16 @@ export function Dashboard() {
 
     const [pollType, setPollType] = useState<'official' | 'community'>('official');
     const [pollsList, setPollsList] = useState<any[]>([]);
+    const [isLoadingList, setIsLoadingList] = useState(true);
     const [selectedPollId, setSelectedPollId] = useState<number | null>(null);
 
     // Filter & Pagination State
     const [communityFilter, setCommunityFilter] = useState<'ALL' | 'LIVE' | 'REVEALING' | 'ENDED'>('ALL');
     const [communityPage, setCommunityPage] = useState(1);
     const ITEMS_PER_PAGE = 5;
+
+    // Create Poll Modal State
+    const [isCreatePollModalOpen, setIsCreatePollModalOpen] = useState(false);
 
     // Derived Logic for Community Polls
     const filteredCommunityPolls = pollsList.filter(p => {
@@ -97,6 +100,7 @@ export function Dashboard() {
     // Fetch Polls List
     useEffect(() => {
         const fetchPolls = async () => {
+            setIsLoadingList(true);
             try {
                 const res = await fetch(`${import.meta.env.VITE_API_URL}/api/polls?type=${pollType}`);
                 const data = await res.json();
@@ -104,6 +108,8 @@ export function Dashboard() {
                 setPollsList(data);
             } catch (err) {
                 console.error("Failed to fetch polls", err);
+            } finally {
+                setIsLoadingList(false);
             }
         };
         fetchPolls();
@@ -150,10 +156,20 @@ export function Dashboard() {
     });
 
     // Fetch Admin to check for "Official" status
-    const { data: adminAddress } = useReadContract({
+    // Fetch Admin to check for "Official" status
+    useReadContract({
         address: ORACLE_POLL_ADDRESS,
         abi: ORACLE_POLL_ABI,
         functionName: 'admin',
+    });
+
+    // Check Premium Status
+    const { data: isPremium } = useReadContract({
+        address: ORACLE_POLL_ADDRESS,
+        abi: ORACLE_POLL_ABI,
+        functionName: 'isPremium',
+        args: [address as `0x${string}`],
+        query: { enabled: !!address }
     });
 
     // --- DATA FOR SYNCING (Head of Chain) ---
@@ -195,83 +211,9 @@ export function Dashboard() {
 
 
 
-    // Dev only create poll
-    const { writeContractAsync } = useWriteContract();
-    const handleCreatePoll = async () => {
-        try {
-            if (!address || !publicClient) return;
-            const title = "Will Bitcoin hit $100k in 2026? 🚀";
-            const options = ["Yes", "No", "Maybe"];
-            const commitDuration = 120; // 2 mins
-            const revealDuration = 120; // 2 mins
-
-            const hash = await writeContractAsync({
-                address: ORACLE_POLL_ADDRESS,
-                abi: ORACLE_POLL_ABI,
-                functionName: 'createPoll',
-                args: [
-                    title,
-                    options,
-                    BigInt(commitDuration),
-                    BigInt(revealDuration)
-                ]
-            });
-            console.log("Creation Tx sent:", hash);
-            alert("Tx Sent! Waiting for confirmation...");
-
-            const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-            // Find PollCreated log
-            const logs = parseEventLogs({
-                abi: ORACLE_POLL_ABI,
-                eventName: 'PollCreated',
-                logs: receipt.logs
-            });
-
-            if (logs.length > 0) {
-                const pollId = logs[0].args.pollId;
-                console.log("Confirmed Poll ID:", pollId);
-
-                // Determine if Community
-                const isCommunity = adminAddress ? (address.toLowerCase() !== adminAddress.toLowerCase()) : false;
-
-                // Save to DB
-                console.log("Saving to DB...");
-                try {
-                    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/polls`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contractPollId: Number(pollId),
-                            title: title,
-                            options: options,
-                            commitEndTime: Math.floor(Date.now() / 1000) + commitDuration,
-                            revealEndTime: Math.floor(Date.now() / 1000) + commitDuration + revealDuration,
-                            isCommunity: isCommunity
-                        })
-                    });
-
-                    if (res.ok) {
-                        alert("Poll Created and Saved to DB! Refreshing...");
-                        window.location.reload();
-                    } else {
-                        const errText = await res.text();
-                        console.error("DB Save Failed:", errText);
-                        alert("Tx Success, but DB Save Failed: " + errText);
-                    }
-                } catch (fetchErr) {
-                    console.error("Network Error saving to DB:", fetchErr);
-                    alert("Tx Success, but Network Error saving to DB");
-                }
-            } else {
-                console.error("No PollCreated event found in receipt logs", receipt);
-                alert("Tx Confirmed, but could not find PollCreated event!");
-            }
-
-        } catch (e) {
-            console.error(e);
-            alert("Failed to create poll");
-        }
+    // Dev only create poll - now just opens the modal
+    const handleCreatePoll = () => {
+        setIsCreatePollModalOpen(true);
     };
 
     const showSuccess = (title: string, message: string) => {
@@ -340,7 +282,8 @@ export function Dashboard() {
                         <main className="px-4 space-y-4">
 
                             {/* Hero Card: The Question */}
-                            {activeTab !== 'LEADERBOARD' && activeTab !== 'PROFILE' && !(pollType === 'community' && selectedPollId === null) && (
+                            {/* Hide Hero if Loading List OR if No Polls & Official (Empty State) */}
+                            {activeTab !== 'LEADERBOARD' && activeTab !== 'PROFILE' && !(pollType === 'community' && selectedPollId === null) && (!isLoadingList && pollData) && (
                                 <motion.div
                                     layout
                                     className="bg-white rounded-[2.5rem] p-8 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] border-b-8 border-gray-100 relative overflow-hidden"
@@ -447,10 +390,78 @@ export function Dashboard() {
                                                     ))}
                                                 </div>
 
-                                                {paginatedCommunityPolls.length === 0 && (
-                                                    <div className="text-center py-10 text-gray-400 font-bold">
-                                                        No polls found matching filter.
+                                                {isLoadingList && (
+                                                    <div className="text-center py-10">
+                                                        <div className="text-gray-400 font-bold animate-pulse">Loading Polls...</div>
                                                     </div>
+                                                )}
+
+                                                {!isLoadingList && paginatedCommunityPolls.length === 0 && (
+                                                    <>
+                                                        {communityFilter === 'ALL' ? (
+                                                            <>
+                                                                {isPremium ? (
+                                                                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-[2.5rem] p-8 border-2 border-purple-100 flex flex-col items-center justify-center text-center mt-4 relative overflow-hidden">
+                                                                        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                                                                        <div className="w-16 h-16 bg-gradient-to-br from-purple-200 to-pink-400 rounded-2xl rotate-3 flex items-center justify-center mb-6 shadow-lg shadow-purple-200">
+                                                                            <Zap className="w-8 h-8 text-white" />
+                                                                        </div>
+                                                                        <h3 className="text-2xl font-display font-black text-purple-900 mb-2">
+                                                                            You are a Creator
+                                                                        </h3>
+                                                                        <p className="text-purple-700/80 text-sm font-bold mb-8 max-w-[240px] leading-relaxed">
+                                                                            Ready to launch your next prediction market? The community is waiting.
+                                                                        </p>
+                                                                        <button
+                                                                            onClick={() => setIsCreatePollModalOpen(true)}
+                                                                            className="w-full py-4 bg-[#8B5CF6] text-white rounded-2xl font-black text-lg shadow-[0_8px_0_rgb(109,40,217)] hover:shadow-[0_4px_0_rgb(109,40,217)] hover:translate-y-[4px] active:shadow-none active:translate-y-[8px] transition-all flex items-center justify-center gap-3 uppercase font-display tracking-wider"
+                                                                        >
+                                                                            <Sparkles className="w-5 h-5 text-white" />
+                                                                            Create Community Poll
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-[2.5rem] p-8 border-2 border-amber-100 flex flex-col items-center justify-center text-center mt-4 relative overflow-hidden">
+                                                                        <div className="absolute top-0 right-0 w-32 h-32 bg-amber-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                                                                        <div className="w-16 h-16 bg-gradient-to-br from-amber-200 to-yellow-400 rounded-2xl rotate-6 flex items-center justify-center mb-6 shadow-lg shadow-amber-200">
+                                                                            <Crown className="w-8 h-8 text-white" />
+                                                                        </div>
+                                                                        <h3 className="text-2xl font-display font-black text-amber-900 mb-2">
+                                                                            Become a Creator
+                                                                        </h3>
+                                                                        <p className="text-amber-700/80 text-sm font-bold mb-8 max-w-[240px] leading-relaxed">
+                                                                            Unlock the ability to create your own polls and earn rewards from the community.
+                                                                        </p>
+                                                                        <button
+                                                                            onClick={() => setActiveTab('PROFILE')}
+                                                                            className="px-8 py-4 bg-black text-white rounded-2xl font-bold shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+                                                                        >
+                                                                            <Sparkles className="w-4 h-4 text-yellow-300" />
+                                                                            Get Premium Access
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <div className="border-4 border-dashed border-gray-200 rounded-[2.5rem] p-10 flex flex-col items-center justify-center bg-gray-50/50 mt-4">
+                                                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                                                                    <Ghost className="w-8 h-8 text-gray-400" />
+                                                                </div>
+                                                                <h3 className="text-xl font-display font-bold text-gray-800 mb-2">
+                                                                    No polls match filter
+                                                                </h3>
+                                                                <p className="text-gray-400 text-sm font-bold mb-6 max-w-[200px] leading-relaxed text-center">
+                                                                    Try changing the filter to see more results.
+                                                                </p>
+                                                                <button
+                                                                    onClick={() => { setCommunityFilter('ALL'); setCommunityPage(1); }}
+                                                                    className="px-6 py-3 bg-white border-2 border-gray-200 text-gray-600 rounded-xl font-bold hover:border-gray-300 hover:text-gray-800 transition-colors"
+                                                                >
+                                                                    Clear Filters
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </>
                                                 )}
                                                 {paginatedCommunityPolls.map((p) => {
                                                     const nowSec = Date.now() / 1000;
@@ -627,7 +638,29 @@ export function Dashboard() {
                                                         )}
                                                     </>
                                                 ) : (
-                                                    <div className="text-center py-20 text-gray-400">Loading Poll...</div>
+                                                    <div className="text-center py-10">
+                                                        {isLoadingList ? (
+                                                            <div className="text-gray-400 font-bold animate-pulse">Loading Polls...</div>
+                                                        ) : (
+                                                            <div className="border-4 border-dashed border-gray-200 rounded-[2.5rem] p-10 flex flex-col items-center justify-center bg-gray-50/50">
+                                                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                                                                    <Ghost className="w-8 h-8 text-gray-400" />
+                                                                </div>
+                                                                <h3 className="text-xl font-display font-bold text-gray-800 mb-2">
+                                                                    No polls found
+                                                                </h3>
+                                                                <p className="text-gray-400 text-sm font-bold mb-6 max-w-[200px] leading-relaxed">
+                                                                    There are no official polls active right now.
+                                                                </p>
+                                                                <button
+                                                                    onClick={() => { setPollType('community'); setSelectedPollId(null); }}
+                                                                    className="px-6 py-3 bg-white border-2 border-gray-200 text-gray-600 rounded-xl font-bold hover:border-gray-300 hover:text-gray-800 transition-colors"
+                                                                >
+                                                                    Check Community Polls
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </>
                                         )}
@@ -706,6 +739,14 @@ export function Dashboard() {
                         />
                     )}
                 </AnimatePresence>
+
+                {/* Create Poll Modal */}
+                <CreatePollModal
+                    isOpen={isCreatePollModalOpen}
+                    onClose={() => setIsCreatePollModalOpen(false)}
+                    onSuccess={(t, m) => showSuccess(t, m)}
+                    onError={(t, m) => showError(t, m)}
+                />
             </div>
         </div >
     );

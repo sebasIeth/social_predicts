@@ -1,12 +1,13 @@
 
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Trophy, Gavel, CheckCircle, X } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Sparkles, Trophy, Gavel, CheckCircle } from 'lucide-react';
 import { useReadContract, useWriteContract, usePublicClient } from 'wagmi';
 import { type Hex } from 'viem';
 import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI } from '../../constants';
 import { cn } from '../../utils';
 import { PremiumStatus } from '../PremiumStatus';
+import { CreatePollModal } from './CreatePollModal';
 
 interface ProfileViewProps {
     address: string | undefined;
@@ -154,12 +155,6 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
     };
 
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-    const [newPollTitle, setNewPollTitle] = useState('');
-    const [newPollOptions, setNewPollOptions] = useState(['Yes', 'No']);
-    const [commitDuration, setCommitDuration] = useState(3600); // Default 1 hour
-    const [revealDuration, setRevealDuration] = useState(3600); // Default 1 hour
-    const [isCreating, setIsCreating] = useState(false);
-    const { writeContractAsync: writeCreatePoll } = useWriteContract();
 
     // Check Premium Status
     const { data: isPremium } = useReadContract({
@@ -172,63 +167,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
         }
     });
 
-    const handleCreatePoll = async () => {
-        if (!address || !newPollTitle || newPollOptions.some(o => !o)) {
-            onError("Invalid Input", "Please fill in all fields.");
-            return;
-        }
-        setIsCreating(true);
-        try {
-            // Using state values for duration
 
-            // 1. Create on-chain
-            const hash = await writeCreatePoll({
-                address: ORACLE_POLL_ADDRESS,
-                abi: ORACLE_POLL_ABI,
-                functionName: 'createPoll',
-                args: [
-                    newPollTitle,
-                    newPollOptions,
-                    BigInt(commitDuration),
-                    BigInt(revealDuration)
-                ]
-            });
-            onSuccess("Poll Created!", "Transaction sent. Waiting for confirmation...");
-            await publicClient?.waitForTransactionReceipt({ hash });
-
-            // 2. Fetch new poll ID to save metadata
-            const nextId = await publicClient?.readContract({
-                address: ORACLE_POLL_ADDRESS,
-                abi: ORACLE_POLL_ABI,
-                functionName: 'nextPollId',
-            });
-            const createdId = Number(nextId) - 1;
-
-            // 3. Save to Backend with isCommunity: true
-            const now = Math.floor(Date.now() / 1000);
-            await fetch(`${import.meta.env.VITE_API_URL}/api/polls`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contractPollId: createdId,
-                    title: newPollTitle,
-                    options: newPollOptions,
-                    commitEndTime: now + commitDuration,
-                    revealEndTime: now + commitDuration + revealDuration,
-                    isCommunity: true
-                })
-            });
-
-            onSuccess("Success!", "Community Poll Created Successfully!");
-            setIsCreateModalOpen(false);
-            setNewPollTitle('');
-        } catch (e: any) {
-            console.error("Create Poll Failed:", e);
-            onError("Create Failed", e.message || "Unknown error");
-        } finally {
-            setIsCreating(false);
-        }
-    };
 
     const verifyStuckPolls = async (items: any[]) => {
         if (!publicClient) return;
@@ -460,146 +399,12 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
             )}
 
             {/* Create Poll Modal */}
-            <AnimatePresence>
-                {isCreateModalOpen && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-                    >
-                        <motion.div
-                            initial={{ scale: 0.9, y: 20 }}
-                            animate={{ scale: 1, y: 0 }}
-                            exit={{ scale: 0.9, y: 20 }}
-                            className="bg-white rounded-[2rem] p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto scrollbar-hide"
-                        >
-                            <div className="flex justify-between items-center">
-                                <h3 className="text-xl font-display font-black text-gray-800">Create Poll</h3>
-                                <button onClick={() => setIsCreateModalOpen(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
-                                    <X size={20} className="text-gray-500" />
-                                </button>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-xs font-bold text-gray-400 uppercase ml-1">Title / Question</label>
-                                    <input
-                                        type="text"
-                                        value={newPollTitle}
-                                        onChange={(e) => setNewPollTitle(e.target.value)}
-                                        placeholder="Who will win..."
-                                        className="w-full p-4 bg-gray-50 rounded-xl font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500 mt-1"
-                                    />
-                                </div>
-
-                                {/* Dynamic Options */}
-                                <div className="space-y-2">
-                                    <div className="flex justify-between items-center">
-                                        <label className="text-xs font-bold text-gray-400 uppercase ml-1">Options (Max 5)</label>
-                                        {newPollOptions.length < 5 && (
-                                            <button
-                                                onClick={() => setNewPollOptions([...newPollOptions, ''])}
-                                                className="text-[10px] font-black bg-gray-100 text-gray-600 px-2 py-1 rounded-lg hover:bg-gray-200"
-                                            >
-                                                + ADD OPTION
-                                            </button>
-                                        )}
-                                    </div>
-                                    <div className="space-y-2">
-                                        {newPollOptions.map((opt, idx) => (
-                                            <div key={idx} className="flex gap-2">
-                                                <input
-                                                    type="text"
-                                                    value={opt}
-                                                    onChange={(e) => {
-                                                        const newOpts = [...newPollOptions];
-                                                        newOpts[idx] = e.target.value;
-                                                        setNewPollOptions(newOpts);
-                                                    }}
-                                                    className="flex-1 p-3 bg-gray-50 rounded-xl font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
-                                                    placeholder={`Option ${idx + 1}`}
-                                                />
-                                                {newPollOptions.length > 2 && (
-                                                    <button
-                                                        onClick={() => {
-                                                            const newOpts = newPollOptions.filter((_, i) => i !== idx);
-                                                            setNewPollOptions(newOpts);
-                                                        }}
-                                                        className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100"
-                                                    >
-                                                        <X size={14} />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Time Sliders */}
-                                <div className="space-y-4 pt-2">
-                                    {/* Commit Duration Slider */}
-                                    <div>
-                                        <div className="flex justify-between items-center text-xs font-bold text-gray-500 mb-2">
-                                            <span className="uppercase">Voting Duration</span>
-                                            <div className="text-right">
-                                                <div className="text-candy-purple">{Math.floor(commitDuration / 60)} mins</div>
-                                                <div className="text-[10px] text-gray-400 opacity-60">{(commitDuration / 3600).toFixed(1)}h</div>
-                                            </div>
-                                        </div>
-                                        <input
-                                            type="range"
-                                            min="300"
-                                            max="86400"
-                                            step="300"
-                                            value={commitDuration}
-                                            onChange={(e) => setCommitDuration(Number(e.target.value))}
-                                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-candy-purple"
-                                        />
-                                        <div className="flex justify-between text-[10px] text-gray-400 font-bold mt-1">
-                                            <span>5m</span>
-                                            <span>24h</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Reveal Duration Slider */}
-                                    <div>
-                                        <div className="flex justify-between items-center text-xs font-bold text-gray-500 mb-2">
-                                            <span className="uppercase">Reveal Duration</span>
-                                            <div className="text-right">
-                                                <div className="text-candy-yellow">{Math.floor(revealDuration / 60)} mins</div>
-                                                <div className="text-[10px] text-gray-400 opacity-60">{(revealDuration / 3600).toFixed(1)}h</div>
-                                            </div>
-                                        </div>
-                                        <input
-                                            type="range"
-                                            min="300"
-                                            max="86400"
-                                            step="300"
-                                            value={revealDuration}
-                                            onChange={(e) => setRevealDuration(Number(e.target.value))}
-                                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-candy-yellow"
-                                        />
-                                        <div className="flex justify-between text-[10px] text-gray-400 font-bold mt-1">
-                                            <span>5m</span>
-                                            <span>24h</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                            </div>
-
-                            <button
-                                onClick={handleCreatePoll}
-                                disabled={isCreating}
-                                className="w-full py-4 bg-gray-900 text-white rounded-xl font-black text-lg disabled:opacity-50 flex items-center justify-center gap-2 mt-4"
-                            >
-                                {isCreating ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : "LAUNCH POLL 🚀"}
-                            </button>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            <CreatePollModal
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
+                onSuccess={(t, m) => onSuccess(t, m)}
+                onError={(t, m) => onError(t, m)}
+            />
             {/* Stats Card */}
             <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-gray-100 grid grid-cols-2 gap-4">
                 <div className="text-center">

@@ -10,6 +10,8 @@ export interface IPoll extends Document {
     isCommunity: boolean;
 }
 
+import { getCollectionName } from '../utils';
+
 const PollSchema: Schema = new Schema({
     contractPollId: { type: Number, required: true, unique: true },
     title: { type: String, required: true },
@@ -20,4 +22,4 @@ const PollSchema: Schema = new Schema({
     isCommunity: { type: Boolean, default: false }
 });
 
-export default mongoose.model<IPoll>('Poll', PollSchema);
+export default mongoose.model<IPoll>(getCollectionName('Poll'), PollSchema);

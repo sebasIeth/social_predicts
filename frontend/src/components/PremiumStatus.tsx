@@ -136,16 +136,12 @@ export function PremiumStatus() {
 
                         <div className="space-y-3 w-full mb-8 text-left">
                             <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl">
-                                <span className="bg-yellow-100 p-2 rounded-xl text-yellow-600">⚡️</span>
-                                <div><p className="font-bold text-gray-800 text-sm">Auto-Reveal</p></div>
+                                <span className="bg-purple-100 p-2 rounded-xl text-purple-600">🗳️</span>
+                                <div><p className="font-bold text-gray-800 text-sm">Create Unlimited Polls</p><p className="text-xs text-gray-400">Public & private voting</p></div>
                             </div>
                             <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl">
                                 <span className="bg-green-100 p-2 rounded-xl text-green-600">💸</span>
-                                <div><p className="font-bold text-gray-800 text-sm">Auto-Claim</p></div>
-                            </div>
-                            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl">
-                                <span className="bg-purple-100 p-2 rounded-xl text-purple-600">🗳️</span>
-                                <div><p className="font-bold text-gray-800 text-sm">Create Polls</p></div>
+                                <div><p className="font-bold text-gray-800 text-sm">Earn Rewards</p><p className="text-xs text-gray-400">Get paid when people vote</p></div>
                             </div>
                         </div>
 
