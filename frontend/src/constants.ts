@@ -10,6 +10,7 @@ export const ORACLE_POLL_ADDRESS = isDev ? TESTNET_ORACLE_POLL_ADDRESS : MAINNET
 export const BASE_USDC_ADDRESS = isDev ? TESTNET_BASE_USDC_ADDRESS : MAINNET_BASE_USDC_ADDRESS;
 export const STAKE_AMOUNT = 1000n; // 0.001 USDC (6 decimals)
 export const TARGET_CHAIN_ID = isDev ? 84532 : 8453; // Base Sepolia vs Base Mainnet
+export const BLOCK_EXPLORER_URL = isDev ? "https://sepolia.basescan.org" : "https://basescan.org";
 
 export const ORACLE_POLL_ABI = [
     {

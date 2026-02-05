@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { TrendingUp, DollarSign, Clock, ExternalLink, ChevronLeft, ChevronRight, BarChart3 } from 'lucide-react';
 import { useAccount, useReadContracts, usePublicClient } from 'wagmi';
 import { formatUnits } from 'viem';
-import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI } from '../../constants';
+import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI, BLOCK_EXPLORER_URL } from '../../constants';
 import { cn } from '../../utils';
 
 const ITEMS_PER_PAGE = 5;
@@ -211,7 +211,7 @@ function MyPollCard({ poll, initialOnChainData }: { poll: any, initialOnChainDat
 
                     {payoutTx && (
                         <a
-                            href={`https://sepolia.basescan.org/tx/${payoutTx}`}
+                            href={`${BLOCK_EXPLORER_URL}/tx/${payoutTx}`}
                             target="_blank"
                             rel="noreferrer"
                             className="flex items-center gap-1 text-[10px] font-bold text-blue-500 hover:underline"
