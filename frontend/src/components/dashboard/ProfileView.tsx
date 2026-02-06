@@ -71,12 +71,16 @@ interface VoteHistoryItem {
 export function ProfileView({ address, now, onSuccess, onError, onLogout }: ProfileViewProps) {
     const [history, setHistory] = useState<VoteHistoryItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [verifying, setVerifying] = useState(false);
     const { writeContractAsync: writeReveal } = useWriteContract();
     const [revealingIndices, setRevealingIndices] = useState<Set<string>>(new Set());
     const [resolvingPolls, setResolvingPolls] = useState<Set<number>>(new Set());
     const [claimingIndices, setClaimingIndices] = useState<Set<string>>(new Set());
     const [confirmResolve, setConfirmResolve] = useState<{ pollId: number; title: string } | null>(null);
     const publicClient = usePublicClient();
+
+    // Combined loading state - show skeleton while fetching OR verifying
+    const isFullyLoaded = !loading && !verifying;
 
     // Filters & Pagination
     const [filter, setFilter] = useState<'ALL' | 'OPEN' | 'REVEAL' | 'RESOLVED' | 'WON' | 'LOST'>('ALL');
@@ -201,8 +205,16 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
 
     const fetchHistory = async () => {
         if (!address) return;
+
+        // Minimum loading time of 3 seconds for smooth UX
+        const minLoadTime = new Promise(resolve => setTimeout(resolve, 3000));
+
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/votes/user/${address}`);
+            const [res] = await Promise.all([
+                fetch(`${import.meta.env.VITE_API_URL}/api/votes/user/${address}`),
+                minLoadTime
+            ]);
+
             if (!res.ok) return;
             const data: VoteHistoryItem[] = await res.json();
             setHistory(data);
@@ -230,7 +242,10 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
 
 
     const verifyStuckPolls = async (items: VoteHistoryItem[]) => {
-        if (!publicClient) return;
+        if (!publicClient) {
+            setVerifying(false);
+            return;
+        }
 
         const pollsToCheck = items.filter(item => {
             const poll = item.pollInfo;
@@ -242,7 +257,12 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
             return stuck || won || revealPhase;
         });
 
-        if (pollsToCheck.length === 0) return;
+        if (pollsToCheck.length === 0) {
+            setVerifying(false);
+            return;
+        }
+
+        setVerifying(true);
 
         for (const item of pollsToCheck) {
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -312,6 +332,8 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                 // Failed to verify poll
             }
         }
+
+        setVerifying(false);
     };
 
     const handleReveal = async (pId: number, backendVote: VoteHistoryItem) => {
@@ -415,9 +437,33 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
     }, [address]);
 
     if (!address) return <div className="p-8 text-center font-bold text-gray-400">Please connect your wallet to view your profile.</div>;
-    if (loading) return <div className="p-8 text-center text-gray-400">Loading History...</div>;
 
     const totalWon = history.length * 0.001; // Mock calculation based on stake
+
+    // Skeleton component for vote history cards
+    const VoteHistorySkeleton = () => (
+        <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 animate-pulse">
+                    {/* Header skeleton */}
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="h-3 w-16 bg-gray-200 rounded"></div>
+                        <div className="h-3 w-24 bg-gray-200 rounded"></div>
+                    </div>
+                    {/* Title skeleton */}
+                    <div className="h-5 w-3/4 bg-gray-200 rounded mb-3"></div>
+                    {/* Tags skeleton */}
+                    <div className="flex gap-2 mb-4">
+                        <div className="h-5 w-20 bg-gray-100 rounded"></div>
+                        <div className="h-5 w-24 bg-gray-100 rounded"></div>
+                        <div className="h-5 w-16 bg-gray-100 rounded"></div>
+                    </div>
+                    {/* Button skeleton */}
+                    <div className="h-12 w-full bg-gray-200 rounded-xl"></div>
+                </div>
+            ))}
+        </div>
+    );
 
     return (
         <motion.div
@@ -474,7 +520,12 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                 )}
             </div>
 
-            <h3 className="text-lg font-display font-bold text-gray-800 px-2">Voting History</h3>
+            <h3 className="text-lg font-display font-bold text-gray-800 px-2">
+                Voting History
+                {verifying && (
+                    <span className="ml-2 text-xs font-normal text-gray-400">(syncing...)</span>
+                )}
+            </h3>
 
             {/* Filters */}
             <div className="flex gap-2 overflow-x-auto px-2 pb-2 scrollbar-hide">
@@ -500,12 +551,17 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
             </div>
 
             <div className="space-y-4">
-                {paginatedHistory.length === 0 && (
+                {/* Show skeleton while loading or verifying */}
+                {!isFullyLoaded ? (
+                    <VoteHistorySkeleton />
+                ) : paginatedHistory.length === 0 ? (
                     <p className="text-center py-10 text-gray-400 font-bold">
                         {history.length === 0 ? "No votes recorded yet." : "No votes match filter."}
                     </p>
-                )}
-                {paginatedHistory.map((item, idx) => {
+                ) : null}
+
+                {/* Show actual vote cards only when fully loaded */}
+                {isFullyLoaded && paginatedHistory.map((item, idx) => {
                     const poll = item.pollInfo;
                     const isOpen = now < poll.commitEndTime;
                     const isRevealPhase = now >= poll.commitEndTime && now < poll.revealEndTime;
@@ -631,7 +687,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                 })}
 
                 {/* Pagination Controls */}
-                {totalPages > 1 && (
+                {isFullyLoaded && totalPages > 1 && (
                     <div className="flex justify-center items-center gap-4 py-4">
                         <button
                             disabled={page === 1}

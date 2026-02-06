@@ -171,7 +171,13 @@ export function Dashboard() {
 
     // Use contract options if available, otherwise fallback to database options
     const activePollFromDb = pollsList.find(p => p.contractPollId === activePollId);
-    const options = (contractOptions && contractOptions.length > 0)
+
+    // Validate that options are non-empty strings, otherwise fallback to DB
+    const hasValidContractOptions = contractOptions &&
+        contractOptions.length > 0 &&
+        contractOptions.every(opt => typeof opt === 'string' && opt.trim().length > 0);
+
+    const options = hasValidContractOptions
         ? contractOptions
         : (activePollFromDb?.options || []);
 
@@ -350,7 +356,9 @@ export function Dashboard() {
                                     </div>
 
                                     <h2 className="text-3xl font-display font-bold leading-tight mb-6 text-gray-800">
-                                        {(pollData[1] as string) || activePollFromDb?.title || "Loading..."}
+                                        {(typeof pollData[1] === 'string' && pollData[1].trim())
+                                            ? pollData[1]
+                                            : (activePollFromDb?.title || "Loading...")}
                                     </h2>
 
                                     {/* Show Winner if RESULT phase and poll is resolved */}

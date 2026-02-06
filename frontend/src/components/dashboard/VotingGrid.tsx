@@ -268,9 +268,14 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
                         return val > max ? val : max;
                     }, 0n));
 
+                    // Ensure option is a valid string, otherwise show fallback
+                    const optionLabel = (typeof opt === 'string' && opt.trim().length > 0)
+                        ? opt
+                        : `Option ${idx + 1}`;
+
                     return (
                         <button
-                            key={opt}
+                            key={`${pollId}-option-${idx}`}
                             onClick={() => enabled && !hasVoted && setSelected(idx)}
                             disabled={!enabled || hasVoted}
                             className={cn(
@@ -295,7 +300,7 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
                             )}
 
                             <div className="relative z-10">
-                                <span className="font-display font-bold text-lg block mb-1">{opt}</span>
+                                <span className="font-display font-bold text-lg block mb-1">{optionLabel}</span>
                                 {/* Results Logic: Show if voting is disabled (aka REVEAL/RESULT phase) or if user voted */}
                                 {!enabled && (
                                     <div className="flex items-center gap-2 mt-2">
