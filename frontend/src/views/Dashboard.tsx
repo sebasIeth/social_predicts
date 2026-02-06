@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { OpenfortButton, useSignOut } from "@openfort/react";
-import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, Ghost, Crown, LayoutDashboard } from 'lucide-react';
+import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, Ghost, Crown, LayoutDashboard, HelpCircle } from 'lucide-react';
 import { useAccount, useConnect, useDisconnect, useReadContract, useWatchContractEvent } from 'wagmi';
 import { injected } from 'wagmi/connectors';
 import { formatUnits } from 'viem';
@@ -14,6 +14,7 @@ import { cn, formatTime } from '../utils';
 // Components
 import { FeedbackModal } from '../components/ui/FeedbackModal';
 import { NavButton } from '../components/ui/NavButton';
+import { OnboardingModal } from '../components/ui/OnboardingModal';
 import { VotingGrid } from '../components/dashboard/VotingGrid';
 import { RevealZone } from '../components/dashboard/RevealZone';
 import { LeaderboardView } from '../components/dashboard/LeaderboardView';
@@ -32,6 +33,19 @@ export function Dashboard() {
     const { signOut } = useSignOut();
 
     const [feedbackModal, setFeedbackModal] = useState<{ type: 'success' | 'error', title: string, message: string, isOpen: boolean } | null>(null);
+
+    // Onboarding state
+    const [showOnboarding, setShowOnboarding] = useState(false);
+
+    // Check if first time user on mount
+    useEffect(() => {
+        const hasSeenOnboarding = localStorage.getItem('oracle_polls_onboarding_complete');
+        if (!hasSeenOnboarding) {
+            // Small delay to let the app load first
+            const timer = setTimeout(() => setShowOnboarding(true), 500);
+            return () => clearTimeout(timer);
+        }
+    }, []);
 
     useEffect(() => {
         if (connector?.id === 'farcaster') {
@@ -264,6 +278,15 @@ export function Dashboard() {
                             </div>
 
                             <div className="flex items-center gap-2">
+                                {/* Help Button */}
+                                <button
+                                    onClick={() => setShowOnboarding(true)}
+                                    className="p-2 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+                                    aria-label="Show help"
+                                >
+                                    <HelpCircle size={18} className="text-gray-500" />
+                                </button>
+
                                 {!isMiniApp ? (
                                     <div className="scale-90">
                                         <OpenfortButton />
@@ -854,6 +877,12 @@ export function Dashboard() {
                     onClose={() => setIsCreatePollModalOpen(false)}
                     onSuccess={(t, m) => showSuccess(t, m)}
                     onError={(t, m) => showError(t, m)}
+                />
+
+                {/* Onboarding Modal for First-Time Users */}
+                <OnboardingModal
+                    isOpen={showOnboarding}
+                    onClose={() => setShowOnboarding(false)}
                 />
             </div>
         </div >
