@@ -9,9 +9,31 @@ import { cn } from '../../utils';
 
 const ITEMS_PER_PAGE = 5;
 
+interface Poll {
+    _id: string;
+    contractPollId: number;
+    title: string;
+    options: string[];
+    commitEndTime: number;
+    revealEndTime: number;
+    createdAt: string;
+    isCommunity: boolean;
+    creator?: string;
+}
+
+interface OnChainPollData {
+    0: bigint;
+    1: string;
+    2: bigint;
+    3: bigint;
+    4: bigint;
+    5: boolean;
+    6: bigint;
+}
+
 export function MyPollsView() {
     const { address } = useAccount();
-    const [polls, setPolls] = useState<any[]>([]);
+    const [polls, setPolls] = useState<Poll[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
 
@@ -20,10 +42,11 @@ export function MyPollsView() {
             if (!address) return;
             try {
                 const res = await fetch(`${import.meta.env.VITE_API_URL}/api/polls?type=mypolls&creator=${address}`);
-                const data = await res.json();
+                if (!res.ok) return;
+                const data: Poll[] = await res.json();
                 setPolls(data);
-            } catch (error) {
-                console.error("Failed to fetch my polls", error);
+            } catch {
+                // Failed to fetch polls
             } finally {
                 setLoading(false);
             }
@@ -42,13 +65,12 @@ export function MyPollsView() {
         query: { enabled: polls.length > 0 }
     });
 
-    // Calculate Stats
     let totalEarnings = 0;
     if (pollsOnChain) {
         pollsOnChain.forEach(result => {
-            if (result.status === 'success') {
-                const data: any = result.result;
-                const stake = Number(formatUnits(data[4], 6)); // totalStake
+            if (result.status === 'success' && result.result) {
+                const data = result.result as unknown as OnChainPollData;
+                const stake = Number(formatUnits(data[4], 6));
                 totalEarnings += (stake * 0.25);
             }
         });
@@ -108,10 +130,10 @@ export function MyPollsView() {
             ) : (
                 <div className="space-y-3">
                     {currentPolls.map((poll, index) => {
-                        // Pass the corresponding on-chain data if available
-                        const onChainData = pollsOnChain && pollsOnChain[startIndex + index]?.status === 'success'
-                            ? pollsOnChain[startIndex + index].result
-                            : null;
+                        const result = pollsOnChain?.[startIndex + index];
+                        const onChainData = result?.status === 'success' && result.result
+                            ? result.result as unknown as OnChainPollData
+                            : undefined;
 
                         return <MyPollCard key={poll._id} poll={poll} initialOnChainData={onChainData} />;
                     })}
@@ -144,18 +166,15 @@ export function MyPollsView() {
     );
 }
 
-function MyPollCard({ poll, initialOnChainData }: { poll: any, initialOnChainData?: any }) {
+function MyPollCard({ poll, initialOnChainData }: { poll: Poll, initialOnChainData?: OnChainPollData }) {
     const publicClient = usePublicClient();
     const [payoutTx, setPayoutTx] = useState<string | null>(null);
 
-    // Use passed data if available, otherwise 0n
     const totalStake = initialOnChainData ? initialOnChainData[4] : 0n;
     const resolved = initialOnChainData ? initialOnChainData[5] : false;
 
-    // Calculate Earnings (25% of Total Stake)
     const earnings = Number(formatUnits(BigInt(totalStake), 6)) * 0.25;
 
-    // Fetch Payout TX if resolved
     useEffect(() => {
         const fetchPayoutTx = async () => {
             if (resolved && publicClient) {
@@ -166,13 +185,13 @@ function MyPollCard({ poll, initialOnChainData }: { poll: any, initialOnChainDat
                         eventName: 'PollResolved',
                         args: { pollId: BigInt(poll.contractPollId) },
                         fromBlock: 'earliest'
-                    } as any);
+                    });
 
                     if (logs && logs.length > 0) {
                         setPayoutTx(logs[0].transactionHash);
                     }
-                } catch (err) {
-                    console.error("Failed to fetch payout tx", err);
+                } catch {
+                    // Failed to fetch payout tx
                 }
             }
         };

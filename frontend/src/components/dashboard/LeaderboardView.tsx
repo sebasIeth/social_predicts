@@ -5,9 +5,23 @@ import { Trophy } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { cn } from '../../utils';
 
+interface LeaderboardUser {
+    address: string;
+    alias: string;
+    gamesPlayed: number;
+    gamesWon: number;
+    winRate: string;
+    rank?: number;
+}
+
+interface LeaderboardData {
+    leaderboard: LeaderboardUser[];
+    userRank: LeaderboardUser | null;
+}
+
 export function LeaderboardView() {
     const { address } = useAccount();
-    const [data, setData] = useState<{ leaderboard: any[], userRank: any | null }>({ leaderboard: [], userRank: null });
+    const [data, setData] = useState<LeaderboardData>({ leaderboard: [], userRank: null });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -15,15 +29,15 @@ export function LeaderboardView() {
             try {
                 const query = address ? `?address=${address}` : '';
                 const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/leaderboard${query}`);
+                if (!res.ok) return;
                 const result = await res.json();
-                // Handle both old array format (fallback) and new object format
                 if (Array.isArray(result)) {
                     setData({ leaderboard: result, userRank: null });
                 } else {
                     setData(result);
                 }
-            } catch (e) {
-                console.error(e);
+            } catch {
+                // Failed to fetch leaderboard
             } finally {
                 setLoading(false);
             }
@@ -109,7 +123,7 @@ export function LeaderboardView() {
     );
 }
 
-function LeaderboardRow({ user, index }: { user: any, index: number }) {
+function LeaderboardRow({ user, index }: { user: LeaderboardUser, index: number }) {
     return (
         <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between">
             <div className="flex items-center space-x-4">

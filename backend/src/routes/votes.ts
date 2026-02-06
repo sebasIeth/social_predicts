@@ -29,8 +29,7 @@ router.post('/', async (req, res) => {
         );
 
         res.json(vote);
-    } catch (err: any) {
-        console.error(err.message);
+    } catch {
         res.status(500).send('Server Error');
     }
 });
@@ -38,12 +37,8 @@ router.post('/', async (req, res) => {
 // @route   GET /api/votes/user/:address
 // @desc    Get voting history for a user
 router.get('/user/:address', async (req, res) => {
-    console.log(`GET /api/votes/user/${req.params.address} - Start`);
     try {
-        // Log the search query
         const query = { voterAddress: req.params.address };
-        console.log(`Searching votes for:`, query);
-
         const votes = await Vote.aggregate([
             { $match: query },
             {
@@ -58,10 +53,8 @@ router.get('/user/:address', async (req, res) => {
             { $sort: { timestamp: -1 } }
         ]);
 
-        console.log(`Found ${votes.length} votes for user`);
         res.json(votes);
-    } catch (err: any) {
-        console.error('Aggregation Error:', err.message);
+    } catch {
         res.status(500).send('Server Error');
     }
 });
@@ -110,8 +103,7 @@ router.get('/:address/active-reveals', async (req, res) => {
         ]);
 
         res.json(votes);
-    } catch (err: any) {
-        console.error("Error fetching active reveals:", err);
+    } catch {
         res.status(500).send("Server Error");
     }
 });
@@ -143,8 +135,7 @@ router.get('/recent', async (req, res) => {
             }
         ]);
         res.json(votes);
-    } catch (err: any) {
-        console.error("Error fetching recent votes:", err);
+    } catch {
         res.status(500).send("Server Error");
     }
 });

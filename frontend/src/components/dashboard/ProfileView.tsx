@@ -1,13 +1,45 @@
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Sparkles, Trophy, Gavel, CheckCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Sparkles, Trophy, Gavel, CheckCircle, AlertTriangle, X } from 'lucide-react';
 import { useReadContract, useWriteContract, usePublicClient } from 'wagmi';
 import { type Hex } from 'viem';
 import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI } from '../../constants';
 import { cn } from '../../utils';
 import { PremiumStatus } from '../PremiumStatus';
 import { CreatePollModal } from './CreatePollModal';
+
+function getErrorMessage(error: unknown): string {
+    const errorObj = error as { details?: string; shortMessage?: string; message?: string };
+    const rawMessage = errorObj.details || errorObj.shortMessage || errorObj.message || '';
+
+    if (rawMessage.includes('insufficient funds') || rawMessage.includes('InsufficientBalance')) {
+        return 'Not enough ETH for gas fees. Please add some ETH to your wallet.';
+    }
+    if (rawMessage.includes('user rejected') || rawMessage.includes('User denied')) {
+        return 'Transaction was cancelled.';
+    }
+    if (rawMessage.includes('Resolution time not reached')) {
+        return 'The reveal phase has not ended yet. Please wait until all votes can be revealed.';
+    }
+    if (rawMessage.includes('Already revealed')) {
+        return 'This vote has already been revealed.';
+    }
+    if (rawMessage.includes('Already claimed')) {
+        return 'You have already claimed this reward.';
+    }
+    if (rawMessage.includes('No votes')) {
+        return 'Cannot resolve poll with no votes.';
+    }
+    if (rawMessage.includes('execution reverted')) {
+        return 'Transaction failed. Please try again.';
+    }
+    if (rawMessage.includes('network') || rawMessage.includes('timeout')) {
+        return 'Network error. Please check your connection and try again.';
+    }
+
+    return rawMessage || 'An unexpected error occurred. Please try again.';
+}
 
 interface ProfileViewProps {
     address: string | undefined;
@@ -17,11 +49,33 @@ interface ProfileViewProps {
     onLogout?: () => void;
 }
 
+interface VoteHistoryItem {
+    pollId: number;
+    optionIndex: number;
+    commitmentIndex: number;
+    salt: string;
+    revealed?: boolean;
+    claimed?: boolean;
+    createdAt?: string;
+    pollInfo: {
+        contractPollId: number;
+        title: string;
+        options: string[];
+        commitEndTime: number;
+        revealEndTime: number;
+        resolved?: boolean;
+        winningOptionIndex?: number;
+    };
+}
+
 export function ProfileView({ address, now, onSuccess, onError, onLogout }: ProfileViewProps) {
-    const [history, setHistory] = useState<any[]>([]);
+    const [history, setHistory] = useState<VoteHistoryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const { writeContractAsync: writeReveal } = useWriteContract();
     const [revealingIndices, setRevealingIndices] = useState<Set<string>>(new Set());
+    const [resolvingPolls, setResolvingPolls] = useState<Set<number>>(new Set());
+    const [claimingIndices, setClaimingIndices] = useState<Set<string>>(new Set());
+    const [confirmResolve, setConfirmResolve] = useState<{ pollId: number; title: string } | null>(null);
     const publicClient = usePublicClient();
 
     // Filters & Pagination
@@ -36,7 +90,6 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
         const isOpen = now < poll.commitEndTime;
 
         const isRevealPhase = now >= poll.commitEndTime && now < poll.revealEndTime;
-        // const hasEnded = now >= poll.revealEndTime;
         const isResolved = poll.resolved;
         const isWinner = isResolved && poll.winningOptionIndex === item.optionIndex;
 
@@ -57,19 +110,20 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
 
     const handleResolve = async (pId: number) => {
         if (!address || !publicClient) return;
+
+        setResolvingPolls(prev => new Set(prev).add(pId));
+
         try {
-            // 1. Check on-chain status first
             const onChainPoll = await publicClient.readContract({
                 address: ORACLE_POLL_ADDRESS,
                 abi: ORACLE_POLL_ABI,
-                functionName: 'polls', // [id, question, commitEnd, revealEnd, totalStake, resolved, winner]
+                functionName: 'polls',
                 args: [BigInt(pId)]
             });
 
             const isResolvedOnChain = onChainPoll[5];
             const winningOptionIndex = Number(onChainPoll[6]);
 
-            // Helper to update local state immediately
             const updateLocalState = () => {
                 setHistory(prev => prev.map(item => {
                     if (item.pollInfo.contractPollId === pId) {
@@ -89,8 +143,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
             if (isResolvedOnChain) {
                 onSuccess("Already Resolved", "Poll is already resolved on-chain! Updating view...");
                 updateLocalState();
-                // Background sync
-                fetch(`${import.meta.env.VITE_API_URL}/api/polls/sync`, { method: 'POST' }).catch(console.error).then(() => fetchHistory());
+                syncAndRefetch();
                 return;
             }
 
@@ -100,12 +153,10 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                 functionName: 'resolvePoll',
                 args: [BigInt(pId)]
             });
-            console.log("Resolve Hash:", hash);
             await publicClient.waitForTransactionReceipt({ hash });
 
             onSuccess("Poll Resolved!", "Computing winners...");
 
-            // We need to re-fetch the winner from chain to know who won
             const updatedPoll = await publicClient.readContract({
                 address: ORACLE_POLL_ADDRESS,
                 abi: ORACLE_POLL_ABI,
@@ -128,30 +179,36 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                 return item;
             }));
 
-            // Background sync
-            fetch(`${import.meta.env.VITE_API_URL}/api/polls/sync`, { method: 'POST' }).catch(console.error).then(() => fetchHistory());
+            syncAndRefetch();
 
-        } catch (e: any) {
-            console.error(e);
-            const msg = e.details || e.shortMessage || e.message || "Unknown error";
-            if (msg.includes("Resolution time not reached")) {
-                onError("Cannot Resolve", "Reveal phase not fully ended on-chain.");
-            } else {
-                onError("Resolve Failed", msg);
-            }
+        } catch (e: unknown) {
+            onError("Resolve Failed", getErrorMessage(e));
+        } finally {
+            setResolvingPolls(prev => {
+                const next = new Set(prev);
+                next.delete(pId);
+                return next;
+            });
         }
     };
 
+
+    const syncAndRefetch = () => {
+        fetch(`${import.meta.env.VITE_API_URL}/api/polls/sync`, { method: 'POST' })
+            .catch(() => {})
+            .then(() => fetchHistory());
+    };
 
     const fetchHistory = async () => {
         if (!address) return;
         try {
             const res = await fetch(`${import.meta.env.VITE_API_URL}/api/votes/user/${address}`);
-            const data = await res.json();
+            if (!res.ok) return;
+            const data: VoteHistoryItem[] = await res.json();
             setHistory(data);
             verifyStuckPolls(data);
-        } catch (err) {
-            console.error(err);
+        } catch {
+            // Failed to fetch history
         } finally {
             setLoading(false);
         }
@@ -172,33 +229,27 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
 
 
 
-    const verifyStuckPolls = async (items: any[]) => {
+    const verifyStuckPolls = async (items: VoteHistoryItem[]) => {
         if (!publicClient) return;
 
         const pollsToCheck = items.filter(item => {
             const poll = item.pollInfo;
             if (!poll) return false;
 
-            // Check if stuck (ended but not resolved) OR won (need to check claim status)
             const stuck = (now >= poll.revealEndTime && !poll.resolved);
             const won = (poll.resolved && poll.winningOptionIndex === item.optionIndex);
-            // Also check if in reveal phase but not marked as revealed
             const revealPhase = (now >= poll.commitEndTime && now < poll.revealEndTime && !item.revealed);
             return stuck || won || revealPhase;
         });
 
         if (pollsToCheck.length === 0) return;
 
-        console.log(`Verifying ${pollsToCheck.length} polls for resolution/claim/reveal status...`);
-
         for (const item of pollsToCheck) {
-            // Add throttling to avoid rate limits
             await new Promise(resolve => setTimeout(resolve, 1000));
 
             try {
                 const pId = item.pollInfo.contractPollId;
 
-                // 1. Check Poll State
                 const onChainPoll = await publicClient.readContract({
                     address: ORACLE_POLL_ADDRESS,
                     abi: ORACLE_POLL_ABI,
@@ -209,7 +260,6 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                 const isResolved = onChainPoll[5];
                 const winner = Number(onChainPoll[6]);
 
-                // 2. Check Claim Status (if winner)
                 let isClaimed = item.claimed;
                 if (isResolved && winner === item.optionIndex) {
                     try {
@@ -218,17 +268,15 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                             abi: ORACLE_POLL_ABI,
                             functionName: 'rewardClaimed',
                             args: [BigInt(pId), address as `0x${string}`, BigInt(item.commitmentIndex)]
-                        });
-                    } catch (e) {
-                        console.warn("Failed to check claim status", e);
+                        }) as boolean;
+                    } catch {
+                        // Failed to check claim status
                     }
                 }
 
-                // 3. Check Reveal Status (if in reveal phase and not revealed)
                 let isRevealed = item.revealed;
                 if (!isRevealed && now >= item.pollInfo.commitEndTime && now < item.pollInfo.revealEndTime) {
                     try {
-                        // Use the optimized View function from the contract
                         const hasRevealedOnChain = await publicClient.readContract({
                             address: ORACLE_POLL_ADDRESS,
                             abi: ORACLE_POLL_ABI,
@@ -237,17 +285,14 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                         });
 
                         if (hasRevealedOnChain) {
-                            console.log(`Verified reveal via hasRevealed():`, item.commitmentIndex);
                             isRevealed = true;
                         }
-                    } catch (e) {
-                        console.warn("Failed to check hasRevealed status", e);
+                    } catch {
+                        // Failed to check hasRevealed status
                     }
                 }
 
                 if (isResolved || isClaimed !== item.claimed || isRevealed !== item.revealed) {
-                    console.log(`Updating poll ${pId}: Resolved=${isResolved}, Claimed=${isClaimed}, Revealed=${isRevealed}`);
-
                     setHistory(prev => prev.map(pi => {
                         if (pi.pollInfo.contractPollId === pId) {
                             const updated = { ...pi };
@@ -259,18 +304,17 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                         return pi;
                     }));
 
-                    // Trigger backend sync silently if meaningful change
                     if (isResolved || isRevealed) {
-                        fetch(`${import.meta.env.VITE_API_URL}/api/polls/sync`, { method: 'POST' }).catch(() => { });
+                        fetch(`${import.meta.env.VITE_API_URL}/api/polls/sync`, { method: 'POST' }).catch(() => {});
                     }
                 }
-            } catch (e) {
-                console.error("Failed to verify poll", item.pollInfo.contractPollId, e);
+            } catch {
+                // Failed to verify poll
             }
         }
     };
 
-    const handleReveal = async (pId: number, backendVote: any) => {
+    const handleReveal = async (pId: number, backendVote: VoteHistoryItem) => {
         if (!address) return;
         const salt = backendVote.salt;
         if (!salt) {
@@ -294,12 +338,10 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                 ]
             });
 
-            onSuccess("Vote Revealed!", "Vote Revealed on-chain!");
+            onSuccess("Vote Revealed!", "Your vote is now visible on-chain!");
             fetchHistory();
-        } catch (e: any) {
-            console.error(e);
-            const msg = e.details || e.shortMessage || e.message || "An unexpected error occurred.";
-            onError("Reveal Failed", msg);
+        } catch (e: unknown) {
+            onError("Reveal Failed", getErrorMessage(e));
         } finally {
             const revealKey = `${pId}-${backendVote.commitmentIndex}`;
             setRevealingIndices(prev => {
@@ -312,8 +354,11 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
 
     const handleClaim = async (pId: number, commitmentIndex: number) => {
         if (!address || !publicClient) return;
+
+        const claimKey = `${pId}-${commitmentIndex}`;
+        setClaimingIndices(prev => new Set(prev).add(claimKey));
+
         try {
-            // 1. Check if already claimed on-chain
             const isClaimedOnChain = await publicClient.readContract({
                 address: ORACLE_POLL_ADDRESS,
                 abi: ORACLE_POLL_ABI,
@@ -322,8 +367,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
             });
 
             if (isClaimedOnChain) {
-                onSuccess("Already Claimed", "You have already claimed this reward! ✅");
-                // Update local state immediately
+                onSuccess("Already Claimed", "You have already claimed this reward!");
                 setHistory(prev => prev.map(item => {
                     if (item.pollInfo.contractPollId === pId) {
                         return { ...item, claimed: true };
@@ -342,7 +386,6 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
             });
             onSuccess("Reward Claimed!", "Funds sent to your wallet.");
 
-            // Update local state immediately
             setHistory(prev => prev.map(item => {
                 if (item.pollInfo.contractPollId === pId) {
                     return { ...item, claimed: true };
@@ -350,21 +393,20 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                 return item;
             }));
 
-            // Record win in backend
-            try {
-                await fetch(`${import.meta.env.VITE_API_URL}/api/users/record-win`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ walletAddress: address })
-                });
-            } catch (err) {
-                console.error("Failed to record win:", err);
-            }
+            await fetch(`${import.meta.env.VITE_API_URL}/api/users/record-win`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ walletAddress: address })
+            }).catch(() => {});
 
-        } catch (e: any) {
-            console.error(e);
-            const msg = e.details || e.shortMessage || e.message || "An unexpected error occurred.";
-            onError("Claim Failed", msg);
+        } catch (e: unknown) {
+            onError("Claim Failed", getErrorMessage(e));
+        } finally {
+            setClaimingIndices(prev => {
+                const next = new Set(prev);
+                next.delete(claimKey);
+                return next;
+            });
         }
     };
 
@@ -436,16 +478,23 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
 
             {/* Filters */}
             <div className="flex gap-2 overflow-x-auto px-2 pb-2 scrollbar-hide">
-                {(['ALL', 'OPEN', 'REVEAL', 'RESOLVED', 'WON', 'LOST'] as const).map((f) => (
+                {([
+                    { key: 'ALL', label: 'All' },
+                    { key: 'OPEN', label: 'Voting' },
+                    { key: 'REVEAL', label: 'Revealing' },
+                    { key: 'RESOLVED', label: 'Finished' },
+                    { key: 'WON', label: 'Won' },
+                    { key: 'LOST', label: 'Lost' }
+                ] as const).map((f) => (
                     <button
-                        key={f}
-                        onClick={() => { setFilter(f); setPage(1); }}
+                        key={f.key}
+                        onClick={() => { setFilter(f.key); setPage(1); }}
                         className={cn(
                             "px-3 py-1 rounded-full text-[10px] font-bold transition-colors whitespace-nowrap",
-                            filter === f ? "bg-black text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                            filter === f.key ? "bg-black text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200"
                         )}
                     >
-                        {f}
+                        {f.label}
                     </button>
                 ))}
             </div>
@@ -500,12 +549,12 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                                                 (isOpen ? "bg-green-100 text-green-600" :
                                                     (isRevealPhase ? "bg-yellow-100 text-yellow-600" : "bg-gray-200 text-gray-500"))
                                         )}>
-                                            {isResolved ? (isWinner ? "WON!" : "LOST") :
-                                                (isOpen ? "OPEN" :
-                                                    (isRevealPhase ? "REVEAL PHASE" : "PENDING RESOLUTION"))}
+                                            {isResolved ? (isWinner ? "YOU WON!" : "YOU LOST") :
+                                                (isOpen ? "VOTING OPEN" :
+                                                    (isRevealPhase ? "REVEAL YOUR VOTE" : "AWAITING RESULTS"))}
                                         </span>
                                     </div>
-                                    {isResolved && (
+                                    {isResolved && poll.winningOptionIndex !== undefined && (
                                         <div className="mt-2 text-[10px] font-bold text-gray-400">
                                             Winner: <span className="text-gray-600">{poll.options[poll.winningOptionIndex]}</span>
                                         </div>
@@ -520,8 +569,12 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                                     <button
                                         onClick={() => handleReveal(poll.contractPollId, item)}
                                         disabled={isRevealing}
-                                        className="w-full py-3 bg-candy-yellow text-white rounded-xl text-xs font-bold shadow-lg shadow-candy-yellow/20 hover:scale-[1.02] transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+                                        aria-label="Reveal your vote"
+                                        className="w-full py-3 bg-candy-yellow text-white rounded-xl text-xs font-bold shadow-lg shadow-candy-yellow/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-candy-yellow focus:ring-offset-2 flex items-center justify-center gap-2"
                                     >
+                                        {isRevealing && (
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        )}
                                         {isRevealing ? "REVEALING..." : "REVEAL VOTE"}
                                     </button>
                                 )}
@@ -532,23 +585,40 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                                 )}
 
                                 {/* Show Resolve Button if ended but not resolved */}
-                                {hasEnded && !isResolved && (
-                                    <button
-                                        onClick={() => handleResolve(poll.contractPollId)}
-                                        className="w-full py-3 bg-gray-900 text-white rounded-xl text-xs font-bold shadow-lg hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
-                                    >
-                                        <Gavel size={14} /> RESOLVE POLL
-                                    </button>
-                                )}
+                                {hasEnded && !isResolved && (() => {
+                                    const isResolving = resolvingPolls.has(poll.contractPollId);
+                                    return (
+                                        <button
+                                            onClick={() => setConfirmResolve({ pollId: poll.contractPollId, title: poll.title })}
+                                            disabled={isResolving}
+                                            aria-label="Resolve poll and determine winner"
+                                            className="w-full py-3 bg-gray-900 text-white rounded-xl text-xs font-bold shadow-lg hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-600 focus:ring-offset-2 flex items-center justify-center gap-2"
+                                        >
+                                            {isResolving && (
+                                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                            )}
+                                            <Gavel size={14} /> {isResolving ? "RESOLVING..." : "RESOLVE POLL"}
+                                        </button>
+                                    );
+                                })()}
 
-                                {isWinner && !item.claimed && (
-                                    <button
-                                        onClick={() => handleClaim(poll.contractPollId, item.commitmentIndex)}
-                                        className="w-full py-3 bg-candy-mint text-white rounded-xl text-xs font-bold shadow-lg shadow-candy-mint/20 hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
-                                    >
-                                        <Trophy size={14} /> CLAIM REWARD
-                                    </button>
-                                )}
+                                {isWinner && !item.claimed && (() => {
+                                    const claimKey = `${poll.contractPollId}-${item.commitmentIndex}`;
+                                    const isClaiming = claimingIndices.has(claimKey);
+                                    return (
+                                        <button
+                                            onClick={() => handleClaim(poll.contractPollId, item.commitmentIndex)}
+                                            disabled={isClaiming}
+                                            aria-label="Claim your reward"
+                                            className="w-full py-3 bg-candy-mint text-white rounded-xl text-xs font-bold shadow-lg shadow-candy-mint/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-candy-mint focus:ring-offset-2 flex items-center justify-center gap-2"
+                                        >
+                                            {isClaiming && (
+                                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                            )}
+                                            <Trophy size={14} /> {isClaiming ? "CLAIMING..." : "CLAIM REWARD"}
+                                        </button>
+                                    );
+                                })()}
 
                                 {isWinner && item.claimed && (
                                     <button disabled className="w-full py-3 bg-green-100 text-green-600 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2 border border-green-200">
@@ -583,6 +653,74 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                     </div>
                 )}
             </div>
+
+            {/* Confirmation Modal for Resolving Poll */}
+            <AnimatePresence>
+                {confirmResolve && (
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setConfirmResolve(null)}
+                            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl relative z-10"
+                        >
+                            <button
+                                onClick={() => setConfirmResolve(null)}
+                                className="absolute top-4 right-4 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+                                aria-label="Close"
+                            >
+                                <X size={16} className="text-gray-500" />
+                            </button>
+
+                            <div className="flex flex-col items-center text-center gap-4">
+                                <div className="p-4 bg-yellow-100 rounded-full">
+                                    <AlertTriangle size={32} className="text-yellow-600" />
+                                </div>
+
+                                <div>
+                                    <h3 className="text-xl font-black text-gray-800 mb-2">Resolve Poll?</h3>
+                                    <p className="text-sm text-gray-500 mb-1">
+                                        You are about to finalize results for:
+                                    </p>
+                                    <p className="text-sm font-bold text-gray-700 line-clamp-2">
+                                        "{confirmResolve.title}"
+                                    </p>
+                                </div>
+
+                                <p className="text-xs text-gray-400">
+                                    This action will calculate the winning option based on revealed votes. This cannot be undone.
+                                </p>
+
+                                <div className="flex gap-3 w-full mt-2">
+                                    <button
+                                        onClick={() => setConfirmResolve(null)}
+                                        className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
+                                    >
+                                        CANCEL
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const pollId = confirmResolve.pollId;
+                                            setConfirmResolve(null);
+                                            handleResolve(pollId);
+                                        }}
+                                        className="flex-1 py-3 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-600 focus:ring-offset-2 flex items-center justify-center gap-2"
+                                    >
+                                        <Gavel size={14} /> RESOLVE
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </motion.div>
     );
 }

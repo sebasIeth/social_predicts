@@ -22,23 +22,16 @@ async function main() {
 
     if (!isPremium) {
         console.log("Buying premium...");
-        // Need USDC approval first? Standard deployment usually mints/approves or uses mock.
-        // On Mainnet/Testnet we need real USDC. 
-        // Assuming Deployer HAS USDC and approved. 
-        // If mock, we can just call buyPremium if feeCollector is handled?
-        // Wait, buyPremium transfers USDC FROM user TO feeCollector.
-        // I need to approve USDC first.
 
-        const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // Base Mainnet USDC
+        const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
         const IERC20 = await ethers.getContractAt("IERC20", USDC_ADDRESS);
 
         const balance = await IERC20.balanceOf(deployer.address);
         console.log("USDC Balance:", ethers.formatUnits(balance, 6));
 
-        // Approve large amount
-        const txApprove = await IERC20.approve(ORACLE_POLL_ADDRESS, ethers.parseUnits("1", 6)); // Just need 0.0003 but approving 1
+        const txApprove = await IERC20.approve(ORACLE_POLL_ADDRESS, ethers.parseUnits("1", 6));
         console.log("Approving USDC...");
-        await txApprove.wait(2); // Wait 2 blocks
+        await txApprove.wait(2);
         console.log("Approved USDC");
 
         const txBuy = await oraclePoll.buyPremium(30);
@@ -89,7 +82,9 @@ async function createAndSyncPoll(contract, deployer, question, options, commitDu
                 commitEndTime = parsed.args[2].toString();
                 break;
             }
-        } catch (e) { }
+        } catch {
+            // Event parsing failed, continue
+        }
     }
 
     if (!pollId) {

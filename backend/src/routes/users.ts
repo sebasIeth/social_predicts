@@ -8,7 +8,6 @@ const router = express.Router();
 router.post('/record-win', async (req, res) => {
     try {
         const { walletAddress } = req.body;
-        console.log(`Recording win for ${walletAddress}`);
 
         if (!walletAddress) {
             return res.status(400).json({ msg: 'Wallet address is required' });
@@ -21,8 +20,7 @@ router.post('/record-win', async (req, res) => {
         );
 
         res.json(user);
-    } catch (err: any) {
-        console.error(err.message);
+    } catch {
         res.status(500).send('Server Error');
     }
 });
@@ -42,8 +40,7 @@ router.post('/update', async (req, res) => {
             { new: true, upsert: true }
         );
         res.json(user);
-    } catch (err: any) {
-        console.error(err);
+    } catch {
         res.status(500).send('Server Error');
     }
 });
@@ -75,18 +72,8 @@ router.get('/leaderboard', async (req, res) => {
                 // Check if user is already in top 10
                 const inTop10 = topUsers.some(u => u.walletAddress === address);
 
-                // Calculate rank regardless (so UI knows the number) or just for those outside?
-                // Plan said: "If userRank exists and isn't in top 10".
-                // But we probably want the rank number for the user even if they are in top 10? 
-                // Currently UI just uses index + 1. That works for top 10.
-                // For outside top 10, we need the DB rank.
-
                 if (!inTop10) {
-                    // Count how many users have strictly more wins
                     const betterPlayers = await User.countDocuments({ gamesWon: { $gt: user.gamesWon } });
-                    // Handle ties: For ties, we can just say they are rank X (where X is 1 + betterPlayers).
-                    // This is standard competition ranking (1, 2, 2, 4)
-
                     userRank = {
                         rank: betterPlayers + 1,
                         ...formatUser(user)
@@ -96,8 +83,7 @@ router.get('/leaderboard', async (req, res) => {
         }
 
         res.json({ leaderboard, userRank });
-    } catch (err: any) {
-        console.error(err.message);
+    } catch {
         res.status(500).send('Server Error');
     }
 });

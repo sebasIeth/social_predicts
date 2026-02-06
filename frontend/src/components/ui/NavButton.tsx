@@ -13,9 +13,12 @@ export function NavButton({ active, onClick, icon, label, color }: NavButtonProp
     return (
         <button
             onClick={onClick}
+            aria-label={label}
+            aria-current={active ? 'page' : undefined}
             className={cn(
                 "flex-1 flex flex-col items-center gap-1 p-3 rounded-3xl transition-all duration-300",
-                active ? `${color} text-white shadow-lg scale-105` : "text-gray-400 hover:bg-gray-50"
+                "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500",
+                active ? `${color} text-white shadow-lg scale-105` : "text-gray-400 hover:bg-gray-100 active:scale-95"
             )}
         >
             <div className={cn("p-1", active && "animate-bounce-slow")}>

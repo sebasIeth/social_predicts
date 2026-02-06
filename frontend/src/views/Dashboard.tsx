@@ -55,12 +55,11 @@ export function Dashboard() {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ walletAddress: address, alias: name })
-                        }).catch(err => console.error("Failed to sync alias", err));
+                        }).catch(() => {});
                     }
                 }
-            } catch (e) {
-                console.error("Farcaster SDK Error:", e);
-                // Fallback to false if not in frame? No, keep existing logic.
+            } catch {
+                // Not in Farcaster frame
             }
         };
         init();
@@ -70,13 +69,23 @@ export function Dashboard() {
         try {
             await signOut();
             disconnect();
-        } catch (err) {
-            console.error("Logout failed", err);
+        } catch {
+            // Logout failed
         }
     };
 
+    interface PollListItem {
+        contractPollId: number;
+        title: string;
+        options: string[];
+        commitEndTime: number;
+        revealEndTime: number;
+        isCommunity: boolean;
+        creator?: string;
+    }
+
     const [pollType, setPollType] = useState<'official' | 'community'>('official');
-    const [pollsList, setPollsList] = useState<any[]>([]);
+    const [pollsList, setPollsList] = useState<PollListItem[]>([]);
     const [isLoadingList, setIsLoadingList] = useState(true);
     const [selectedPollId, setSelectedPollId] = useState<number | null>(null);
 
@@ -104,48 +113,37 @@ export function Dashboard() {
         communityPage * ITEMS_PER_PAGE
     );
 
-    // Pagination for Official History
     const [historyPage, setHistoryPage] = useState(1);
     const HISTORY_PER_PAGE = 3;
 
-    // We need 'activePollId' to filter out the "Active" poll from history
-    // But 'activePollId' is defined lower down. 
-    // We will define 'activePollId' earlier or move this logic down? 
-    // Let's defer derived history logic until we determine activePollId.
-
-    // Fetch Polls List
     useEffect(() => {
         const fetchPolls = async () => {
             setIsLoadingList(true);
             try {
-                const res = await fetch(`${import.meta.env.VITE_API_URL}/api/polls?type=${pollType}`);
-                const data = await res.json();
-                console.log(`[Dashboard] Fetched ${pollType} polls:`, data);
+                // Minimum loading time for smooth transition
+                const minLoadTime = new Promise(resolve => setTimeout(resolve, 800));
+                const fetchPromise = fetch(`${import.meta.env.VITE_API_URL}/api/polls?type=${pollType}`);
+
+                const [res] = await Promise.all([fetchPromise, minLoadTime]);
+
+                if (!res.ok) return;
+                const data: PollListItem[] = await res.json();
                 setPollsList(data);
-            } catch (err) {
-                console.error("Failed to fetch polls", err);
+            } catch {
+                // Failed to fetch polls
             } finally {
                 setIsLoadingList(false);
             }
         };
         fetchPolls();
-    }, [pollType, selectedPollId]); // Add selectedPollId dependency only if we want auto-select behavior
+    }, [pollType, selectedPollId]);
 
-    // 1. Get Poll ID (Used for bounds, but we rely on selectedPollId now)
-    // 1. Get Poll ID for SYNCING (Latest on Chain)
-
-
-    // 2. Active Poll ID for DISPLAY (Driven by Selection or DB List)
-    // If we are in "official" tab and have no specific selection, show the latest *official* poll from DB.
-    // If we are in "community", we rely on selectedPollId (user must click from list).
     let activePollId = -1;
     if (selectedPollId !== null) {
         activePollId = selectedPollId;
     } else if (pollType === 'official' && pollsList.length > 0 && pollsList[0].isCommunity === false) {
-        // Automatically show the latest official poll
         activePollId = pollsList[0].contractPollId;
     }
-    // For community, if selectedPollId is null, activePollId stays -1 -> List Mode.
 
     const historyPolls = pollsList.filter(p => !p.isCommunity && p.contractPollId !== activePollId);
     const totalHistoryPages = Math.ceil(historyPolls.length / HISTORY_PER_PAGE);
@@ -163,7 +161,7 @@ export function Dashboard() {
         query: { enabled: activePollId >= 0 }
     });
 
-    const { data: options } = useReadContract({
+    const { data: contractOptions } = useReadContract({
         address: ORACLE_POLL_ADDRESS,
         abi: ORACLE_POLL_ABI,
         functionName: 'getPollOptions',
@@ -171,15 +169,18 @@ export function Dashboard() {
         query: { enabled: activePollId >= 0 }
     });
 
-    // Fetch Admin to check for "Official" status
-    // Fetch Admin to check for "Official" status
+    // Use contract options if available, otherwise fallback to database options
+    const activePollFromDb = pollsList.find(p => p.contractPollId === activePollId);
+    const options = (contractOptions && contractOptions.length > 0)
+        ? contractOptions
+        : (activePollFromDb?.options || []);
+
     useReadContract({
         address: ORACLE_POLL_ADDRESS,
         abi: ORACLE_POLL_ABI,
         functionName: 'admin',
     });
 
-    // Check Premium Status
     const { data: isPremium } = useReadContract({
         address: ORACLE_POLL_ADDRESS,
         abi: ORACLE_POLL_ABI,
@@ -227,7 +228,6 @@ export function Dashboard() {
 
 
 
-    // Dev only create poll - now just opens the modal
     const handleCreatePoll = () => {
         setIsCreatePollModalOpen(true);
     };
@@ -296,9 +296,38 @@ export function Dashboard() {
                         {/* Main Grid Layout */}
                         <main className="px-4 space-y-4">
 
+                            {/* Skeleton Loader when switching between poll types */}
+                            {activeTab === 'VOTE' && isLoadingList && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    className="space-y-4"
+                                >
+                                    {/* Hero Skeleton */}
+                                    <div className="bg-white rounded-[2.5rem] p-8 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] border-b-8 border-gray-100 animate-pulse">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <div className="h-6 w-24 bg-gray-200 rounded-full"></div>
+                                            <div className="h-4 w-20 bg-gray-100 rounded"></div>
+                                        </div>
+                                        <div className="h-8 w-3/4 bg-gray-200 rounded-lg mb-4"></div>
+                                        <div className="h-6 w-1/2 bg-gray-100 rounded-lg"></div>
+                                    </div>
+
+                                    {/* Options Skeleton */}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {[1, 2].map((i) => (
+                                            <div key={i} className="bg-white p-6 rounded-[2rem] border-2 border-gray-100 animate-pulse">
+                                                <div className="h-6 w-full bg-gray-200 rounded mb-2"></div>
+                                                <div className="h-4 w-1/2 bg-gray-100 rounded"></div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </motion.div>
+                            )}
+
                             {/* Hero Card: The Question */}
-                            {/* Hide Hero if Loading List OR if No Polls & Official (Empty State) */}
-                            {activeTab !== 'LEADERBOARD' && activeTab !== 'PROFILE' && activeTab !== 'MYPOLLS' && !(pollType === 'community' && selectedPollId === null) && activePollId >= 0 && (!isLoadingList && pollData) && (
+                            {activeTab !== 'LEADERBOARD' && activeTab !== 'PROFILE' && activeTab !== 'MYPOLLS' && !(pollType === 'community' && selectedPollId === null) && activePollId >= 0 && !isLoadingList && pollData && (
                                 <motion.div
                                     layout
                                     className="bg-white rounded-[2.5rem] p-8 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] border-b-8 border-gray-100 relative overflow-hidden"
@@ -312,7 +341,7 @@ export function Dashboard() {
                                                 phase === 'REVEAL' ? "bg-candy-yellow/20 text-yellow-600" :
                                                     "bg-gray-100 text-gray-400"
                                         )}>
-                                            {phase} PHASE
+                                            {phase === 'COMMIT' ? 'VOTING OPEN' : phase === 'REVEAL' ? 'REVEALING VOTES' : 'FINAL RESULTS'}
                                         </span>
                                         <span className="text-xs font-bold text-gray-400">
                                             {pollData && phase === 'COMMIT' && `Ends in ${formatTime(Number(pollData[2]) - now)}`}
@@ -321,8 +350,18 @@ export function Dashboard() {
                                     </div>
 
                                     <h2 className="text-3xl font-display font-bold leading-tight mb-6 text-gray-800">
-                                        {pollData ? pollData[1] : "Loading Poll..."}
+                                        {(pollData[1] as string) || activePollFromDb?.title || "Loading..."}
                                     </h2>
+
+                                    {/* Show Winner if RESULT phase and poll is resolved */}
+                                    {phase === 'RESULT' && pollData && pollData[5] && options.length > 0 && (
+                                        <div className="mb-4 p-4 bg-green-50 border-2 border-green-200 rounded-2xl">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-green-600 font-black text-sm uppercase">Winner:</span>
+                                                <span className="text-green-800 font-bold text-lg">{options[Number(pollData[6])]}</span>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Stake Info */}
                                     <div className="flex flex-col items-start gap-3 mb-8">
@@ -330,7 +369,7 @@ export function Dashboard() {
                                             Total Stake: {pollData ? formatUnits(pollData[4], 6) : '0'} USDC
                                         </div>
 
-                                        {pollData && Number(pollData[4]) > 0 && (
+                                        {pollData && pollData[4] && Number(pollData[4]) > 0 && (
                                             <div className="flex items-center gap-2">
                                                 <div className="flex -space-x-3">
                                                     {[1, 2, 3].map((i) => (
@@ -394,7 +433,7 @@ export function Dashboard() {
                                                     pollType === 'community' ? "bg-white text-gray-800 shadow-sm" : "text-gray-400 hover:text-gray-600"
                                                 )}
                                             >
-                                                Here Community
+                                                COMMUNITY
                                             </button>
                                         </div>
 
@@ -418,8 +457,17 @@ export function Dashboard() {
                                                 </div>
 
                                                 {isLoadingList && (
-                                                    <div className="text-center py-10">
-                                                        <div className="text-gray-400 font-bold animate-pulse">Loading Polls...</div>
+                                                    <div className="space-y-3">
+                                                        {[1, 2, 3].map((i) => (
+                                                            <div key={i} className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 animate-pulse">
+                                                                <div className="flex justify-between items-start mb-3">
+                                                                    <div className="h-4 w-16 bg-gray-200 rounded"></div>
+                                                                    <div className="h-5 w-20 bg-gray-100 rounded-lg"></div>
+                                                                </div>
+                                                                <div className="h-6 w-3/4 bg-gray-200 rounded mb-2"></div>
+                                                                <div className="h-4 w-1/2 bg-gray-100 rounded"></div>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 )}
 
@@ -454,17 +502,17 @@ export function Dashboard() {
                                                                             <Crown className="w-8 h-8 text-white" />
                                                                         </div>
                                                                         <h3 className="text-2xl font-display font-black text-amber-900 mb-2">
-                                                                            Become a Creator
+                                                                            Become a Poll Creator
                                                                         </h3>
                                                                         <p className="text-amber-700/80 text-sm font-bold mb-8 max-w-[240px] leading-relaxed">
-                                                                            Unlock the ability to create your own polls and earn rewards from the community.
+                                                                            Upgrade to PRO to create your own prediction polls and let the community vote on them.
                                                                         </p>
                                                                         <button
                                                                             onClick={() => setActiveTab('PROFILE')}
                                                                             className="px-8 py-4 bg-black text-white rounded-2xl font-bold shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
                                                                         >
                                                                             <Sparkles className="w-4 h-4 text-yellow-300" />
-                                                                            Get Premium Access
+                                                                            Upgrade to PRO
                                                                         </button>
                                                                     </div>
                                                                 )}
@@ -669,9 +717,21 @@ export function Dashboard() {
                                                         )}
                                                     </>
                                                 ) : (
-                                                    <div className="text-center py-10">
+                                                    <div className="py-4">
                                                         {isLoadingList ? (
-                                                            <div className="text-gray-400 font-bold animate-pulse">Loading Polls...</div>
+                                                            <div className="space-y-4">
+                                                                {/* Voting Grid Skeleton */}
+                                                                <div className="grid grid-cols-2 gap-3">
+                                                                    {[1, 2].map((i) => (
+                                                                        <div key={i} className="bg-white p-6 rounded-[2rem] border-2 border-gray-100 animate-pulse">
+                                                                            <div className="h-6 w-full bg-gray-200 rounded mb-3"></div>
+                                                                            <div className="h-4 w-1/2 bg-gray-100 rounded"></div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                                {/* Button Skeleton */}
+                                                                <div className="h-14 w-full bg-gray-200 rounded-2xl animate-pulse"></div>
+                                                            </div>
                                                         ) : (
                                                             <div className="border-4 border-dashed border-gray-200 rounded-[2.5rem] p-10 flex flex-col items-center justify-center bg-gray-50/50">
                                                                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">

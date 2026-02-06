@@ -2,13 +2,30 @@ import { useState } from 'react';
 import { useAccount, useReadContract, useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
 import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI, BASE_USDC_ADDRESS } from '../constants';
 import { erc20Abi } from 'viem';
-import { Crown, Loader2, Clock } from 'lucide-react';
+import { Crown, Loader2, Clock, AlertCircle } from 'lucide-react';
+
+function getErrorMessage(error: unknown): string {
+    const errorObj = error as { details?: string; shortMessage?: string; message?: string };
+    const rawMessage = errorObj.details || errorObj.shortMessage || errorObj.message || '';
+
+    if (rawMessage.includes('insufficient funds')) {
+        return 'Not enough ETH for gas. Please add ETH to your wallet.';
+    }
+    if (rawMessage.includes('user rejected') || rawMessage.includes('User denied')) {
+        return 'Transaction cancelled.';
+    }
+    if (rawMessage.includes('transfer amount exceeds') || rawMessage.includes('insufficient')) {
+        return 'Not enough USDC. Please add funds to your wallet.';
+    }
+    return 'Purchase failed. Please try again.';
+}
 
 export function PremiumStatus() {
     const { address, isConnected } = useAccount();
     const publicClient = usePublicClient();
     const { writeContractAsync } = useWriteContract();
     const [isBuying, setIsBuying] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     // Check Expiry
     const { data: premiumExpiry, refetch: refetchPremium } = useReadContract({
@@ -25,10 +42,8 @@ export function PremiumStatus() {
         abi: ORACLE_POLL_ABI,
         eventName: 'PremiumPurchased',
         onLogs(logs) {
-            const log = logs[0] as any;
-            // Check if it's for current user
-            if (log.args.user?.toLowerCase() === address?.toLowerCase()) {
-                console.log("Subscription detected!");
+            const log = logs[0] as { args?: { user?: string } };
+            if (log.args?.user?.toLowerCase() === address?.toLowerCase()) {
                 refetchPremium();
                 setShowModal(false);
             }
@@ -55,6 +70,7 @@ export function PremiumStatus() {
 
         const cost = days === 7 ? COST_7_DAYS : COST_30_DAYS;
 
+        setError(null);
         setIsBuying(true);
         try {
             // 1. Approve if needed
@@ -66,7 +82,6 @@ export function PremiumStatus() {
             });
 
             if (allowance < cost) {
-                console.log("Approving USDC...");
                 const hash = await writeContractAsync({
                     address: BASE_USDC_ADDRESS,
                     abi: erc20Abi,
@@ -76,8 +91,6 @@ export function PremiumStatus() {
                 await publicClient.waitForTransactionReceipt({ hash });
             }
 
-            // 2. Buy Subscription
-            console.log(`Buying ${days} Days...`);
             const hash = await writeContractAsync({
                 address: ORACLE_POLL_ADDRESS,
                 abi: ORACLE_POLL_ABI,
@@ -88,9 +101,8 @@ export function PremiumStatus() {
             await publicClient.waitForTransactionReceipt({ hash });
             await refetchPremium();
 
-        } catch (e) {
-            console.error("Purchase Failed:", e);
-            alert("Failed to buy. Check console.");
+        } catch (e: unknown) {
+            setError(getErrorMessage(e));
         } finally {
             setIsBuying(false);
         }
@@ -113,7 +125,7 @@ export function PremiumStatus() {
     return (
         <>
             <button
-                onClick={() => setShowModal(true)}
+                onClick={() => { setShowModal(true); setError(null); }}
                 className="flex items-center gap-1 px-3 py-1.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors"
             >
                 <Crown size={14} />
@@ -144,6 +156,13 @@ export function PremiumStatus() {
                                 <div><p className="font-bold text-gray-800 text-sm">Earn Rewards</p><p className="text-xs text-gray-400">Get paid when people vote</p></div>
                             </div>
                         </div>
+
+                        {error && (
+                            <div className="w-full mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-600">
+                                <AlertCircle size={16} />
+                                <span className="text-xs font-bold">{error}</span>
+                            </div>
+                        )}
 
                         <div className="grid grid-cols-2 gap-3 w-full mt-auto">
                             <button

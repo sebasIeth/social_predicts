@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useWriteContract, usePublicClient, useAccount } from 'wagmi';
 import { parseEventLogs } from 'viem';
 import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI } from '../../constants';
+import { cn } from '../../utils';
 
 interface CreatePollModalProps {
     isOpen: boolean;
@@ -25,7 +26,6 @@ export function CreatePollModal({ isOpen, onClose, onSuccess, onError }: CreateP
     const [revealDuration, setRevealDuration] = useState(60); // Minutes
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Helper: Reset form
     const resetForm = () => {
         setTitle('');
         setOptions(['Yes', 'No']);
@@ -77,12 +77,8 @@ export function CreatePollModal({ isOpen, onClose, onSuccess, onError }: CreateP
                 ]
             });
 
-            console.log("Creation Tx sent:", hash);
-
-            // 2. Wait for Receipt
             const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-            // 3. Find PollCreated log
             const logs = parseEventLogs({
                 abi: ORACLE_POLL_ABI,
                 eventName: 'PollCreated',
@@ -91,22 +87,7 @@ export function CreatePollModal({ isOpen, onClose, onSuccess, onError }: CreateP
 
             if (logs.length > 0) {
                 const pollId = logs[0].args.pollId;
-
-                // 4. Determine pseudo-Community status (Assuming frontend check, but backend handles this mostly anyway?)
-                // Actually backend stores what we send, but Dashboard logic had a check.
-                // We'll calculate it just to match existing logic:
-                // Note: We don't have adminAddress easily here unless we pass it or fetch it.
-                // For now, we'll assume standard implementation creates generic polls and backend cleans up.
-                // BUT the Dashboard logic for saving was: 
-                // "const isCommunity = adminAddress ? (address.toLowerCase() !== adminAddress.toLowerCase()) : false;"
-                // We need to fetch 'admin' to be precise OR let the backend handle it if the backend API supports it?
-                // The current backend API expects `isCommunity` in the body.
-
-                // Fetch Admin directly here to be safe? Or simple hack:
-                // We can just default isCommunity: true for now, since this modal is mainly for "Community" creators.
                 const isCommunity = true;
-
-                // 5. Save to DB
                 const res = await fetch(`${import.meta.env.VITE_API_URL}/api/polls`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -133,9 +114,9 @@ export function CreatePollModal({ isOpen, onClose, onSuccess, onError }: CreateP
                 onError("Event Error", "Could not find PollCreated event.");
             }
 
-        } catch (e: any) {
-            console.error(e);
-            onError("Creation Failed", e.message || "Unknown error occurred.");
+        } catch (e: unknown) {
+            const errorMessage = e instanceof Error ? e.message : "Unknown error occurred.";
+            onError("Creation Failed", errorMessage);
         } finally {
             setIsSubmitting(false);
         }
@@ -181,15 +162,25 @@ export function CreatePollModal({ isOpen, onClose, onSuccess, onError }: CreateP
                         <div className="p-6 space-y-6">
                             {/* Title */}
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                                    Title / Question
-                                </label>
+                                <div className="flex justify-between items-center">
+                                    <label htmlFor="poll-title" className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                        Title / Question <span className="text-red-400">*</span>
+                                    </label>
+                                    <span className="text-[10px] text-gray-300">{title.length}/200</span>
+                                </div>
                                 <input
+                                    id="poll-title"
                                     type="text"
                                     value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
+                                    onChange={(e) => setTitle(e.target.value.slice(0, 200))}
                                     placeholder="Who will win..."
-                                    className="w-full p-4 bg-gray-50 rounded-2xl border-2 border-gray-100 font-bold text-gray-800 placeholder:text-gray-300 focus:outline-none focus:border-candy-purple transition-all"
+                                    maxLength={200}
+                                    required
+                                    aria-required="true"
+                                    className={cn(
+                                        "w-full p-4 bg-gray-50 rounded-2xl border-2 font-bold text-gray-800 placeholder:text-gray-300 focus:outline-none transition-all",
+                                        title.length === 0 ? "border-gray-100 focus:border-candy-purple" : "border-green-200 focus:border-green-400"
+                                    )}
                                 />
                             </div>
 

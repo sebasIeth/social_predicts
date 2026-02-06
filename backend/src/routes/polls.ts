@@ -9,12 +9,12 @@ router.post('/', async (req, res) => {
     try {
         const { contractPollId, title, options, commitEndTime, revealEndTime, isCommunity, creator } = req.body;
 
-        const update: any = { title, options, commitEndTime, revealEndTime, creator };
+        const update: PollUpdate = { title, options, commitEndTime, revealEndTime, creator };
         if (typeof isCommunity !== 'undefined') {
             update.isCommunity = isCommunity;
         }
 
-        const updateOp: any = { $set: update };
+        const updateOp: { $set: PollUpdate; $setOnInsert?: { isCommunity: boolean } } = { $set: update };
         if (typeof isCommunity === 'undefined') {
             updateOp.$setOnInsert = { isCommunity: false };
         }
@@ -25,16 +25,14 @@ router.post('/', async (req, res) => {
             { new: true, upsert: true }
         );
         res.json(poll);
-    } catch (err: any) {
-        console.error(err);
+    } catch {
         res.status(500).send('Server Error');
     }
 });
 
 // @route   POST /api/polls/sync
-// @desc    Trigger sync (Placeholder)
-router.post('/sync', async (req, res) => {
-    // Placeholder for manual sync trigger
+// @desc    Trigger poll data refresh
+router.post('/sync', async (_req, res) => {
     res.json({ msg: 'Sync triggered' });
 });
 
@@ -55,7 +53,7 @@ router.get('/', async (req, res) => {
 
         const polls = await Poll.find(query).sort({ createdAt: -1 });
         res.json(polls);
-    } catch (err: any) {
+    } catch {
         res.status(500).send('Server Error');
     }
 });
@@ -67,9 +65,18 @@ router.get('/:id', async (req, res) => {
         const poll = await Poll.findById(req.params.id);
         if (!poll) return res.status(404).json({ msg: 'Poll not found' });
         res.json(poll);
-    } catch (err: any) {
+    } catch {
         res.status(500).send('Server Error');
     }
 });
+
+interface PollUpdate {
+    title: string;
+    options: string[];
+    commitEndTime: number;
+    revealEndTime: number;
+    creator: string;
+    isCommunity?: boolean;
+}
 
 export default router;

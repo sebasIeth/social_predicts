@@ -1,11 +1,47 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle, Sparkles } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 import { useAccount, useSwitchChain, usePublicClient, useBalance, useReadContract, useWriteContract, useWatchContractEvent, useReadContracts } from 'wagmi';
 import { keccak256, encodePacked, formatUnits, pad, toHex, erc20Abi } from 'viem';
 import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI, BASE_USDC_ADDRESS, STAKE_AMOUNT, TARGET_CHAIN_ID } from '../../constants';
 import { cn } from '../../utils';
+
+interface VoteRecord {
+    pollId: number;
+    optionIndex: number;
+    voterAddress: string;
+}
+
+function getErrorMessage(error: unknown): string {
+    const errorObj = error as { details?: string; shortMessage?: string; message?: string };
+    const rawMessage = errorObj.details || errorObj.shortMessage || errorObj.message || '';
+
+    // Map technical errors to user-friendly messages
+    if (rawMessage.includes('insufficient funds') || rawMessage.includes('InsufficientBalance')) {
+        return 'Not enough ETH for gas fees. Please add some ETH to your wallet.';
+    }
+    if (rawMessage.includes('user rejected') || rawMessage.includes('User denied')) {
+        return 'Transaction was cancelled.';
+    }
+    if (rawMessage.includes('SafeERC20') || rawMessage.includes('transfer amount exceeds')) {
+        return 'Not enough USDC balance. Please add funds to your wallet.';
+    }
+    if (rawMessage.includes('Commit phase ended')) {
+        return 'Voting period has ended. You can no longer vote on this poll.';
+    }
+    if (rawMessage.includes('Already revealed')) {
+        return 'This vote has already been revealed.';
+    }
+    if (rawMessage.includes('execution reverted')) {
+        return 'Transaction failed. Please try again.';
+    }
+    if (rawMessage.includes('network') || rawMessage.includes('timeout')) {
+        return 'Network error. Please check your connection and try again.';
+    }
+
+    return rawMessage || 'An unexpected error occurred. Please try again.';
+}
 
 interface VotingGridProps {
     pollId: number;
@@ -32,10 +68,13 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
         if (!address) return;
         try {
             const res = await fetch(`${import.meta.env.VITE_API_URL}/api/votes/user/${address}`);
-            const data = await res.json();
-            const count = data.filter((v: any) => v.pollId === pollId).length;
+            if (!res.ok) return;
+            const data: VoteRecord[] = await res.json();
+            const count = data.filter((v) => v.pollId === pollId).length;
             setUserVotes(count);
-        } catch (e) { console.error(e) }
+        } catch {
+            // Failed to fetch user votes
+        }
     };
 
     // Check if Premium
@@ -82,7 +121,6 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
         if (!address || !publicClient) return;
 
         try {
-            console.log("Switching to Base...");
             if (!isMiniApp) {
                 await switchChainAsync({ chainId: TARGET_CHAIN_ID });
             }
@@ -93,7 +131,6 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
             }
 
             setIsApproving(true);
-            console.log("Initiating Approval...");
 
             const hash = await writeContractAsync({
                 address: BASE_USDC_ADDRESS,
@@ -102,17 +139,14 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
                 args: [ORACLE_POLL_ADDRESS, STAKE_AMOUNT],
             });
 
-            console.log("Approval Hash Sent:", hash);
             await publicClient.waitForTransactionReceipt({ hash });
             setOptimisticApproved(true);
             await refetchAllowance();
             setIsApproving(false);
             onSuccess("Approved!", "You can now submit your vote.");
-        } catch (e: any) {
-            console.error("Approval Error:", e);
+        } catch (e: unknown) {
             setIsApproving(false);
-            const msg = e.details || e.shortMessage || e.message || "Could not approve USDC";
-            onError("Approval Failed", msg);
+            onError("Approval Failed", getErrorMessage(e));
         }
     };
 
@@ -120,7 +154,6 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
         if (selected === null || !address || !publicClient) return;
 
         try {
-            console.log("Switching to Base for Vote...");
             if (!isMiniApp) {
                 await switchChainAsync({ chainId: TARGET_CHAIN_ID });
             }
@@ -140,8 +173,6 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
             const salt = pad(toHex(Math.floor(Math.random() * 1000000)), { size: 32 });
             const voteHash = keccak256(encodePacked(['uint256', 'bytes32'], [BigInt(selected), salt]));
 
-            console.log("Sending commitVote to Poll:", pollId, "Hash:", voteHash);
-
             const hash = await writeContractAsync({
                 address: ORACLE_POLL_ADDRESS,
                 abi: ORACLE_POLL_ABI,
@@ -149,15 +180,12 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
                 args: [BigInt(pollId), voteHash as `0x${string}`],
             });
 
-            console.log("Tx Sent successfully:", hash);
-            await publicClient.waitForTransactionReceipt({ hash }); // Wait for confirmation before success
+            await publicClient.waitForTransactionReceipt({ hash });
 
-            // 0. Get next commitment index from backend
             const resCount = await fetch(`${import.meta.env.VITE_API_URL}/api/votes/user/${address}`);
-            const userHistory = await resCount.json();
-            const commitmentIndex = userHistory.filter((v: any) => v.pollId === Number(pollId)).length;
+            const userHistory: VoteRecord[] = await resCount.json();
+            const commitmentIndex = userHistory.filter((v) => v.pollId === Number(pollId)).length;
 
-            // Store in array-based localStorage
             const storageKey = `oracle_poll_votes_${pollId}_${address}`;
             const existingVotes = JSON.parse(localStorage.getItem(storageKey) || '[]');
             existingVotes.push({ salt, vote: selected, commitmentIndex });
@@ -173,11 +201,11 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
                     commitmentIndex: commitmentIndex,
                     salt: salt
                 })
-            }).catch(console.error);
+            }).catch(() => {});
 
             setIsCommitting(false);
             if (isPremium) {
-                onSuccess("Vote Locked! 🔒", "Since you're a PRO member, we'll auto-reveal this for you! Sit back and relax.");
+                onSuccess("Vote Locked!", "Since you're a PRO member, we'll auto-reveal this for you! Sit back and relax.");
             } else {
                 onSuccess("Vote Committed!", "Your prediction is locked in. Don't forget to come back and reveal it later!");
             }
@@ -185,11 +213,9 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
             refetchAllowance();
             fetchUserVotes();
             if (onVoteSuccess) onVoteSuccess();
-        } catch (e: any) {
-            console.error("Commit Failed Full Error:", e);
+        } catch (e: unknown) {
             setIsCommitting(false);
-            const msg = e.details || e.shortMessage || e.message || "An unexpected error occurred.";
-            onError("Transaction Failed", msg);
+            onError("Vote Failed", getErrorMessage(e));
         }
     };
 
@@ -211,19 +237,16 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
         refetchTallies();
     }, [pollId, refetchTallies]);
 
-    // Real-time listener for new votes being revealed
     useWatchContractEvent({
         address: ORACLE_POLL_ADDRESS,
         abi: ORACLE_POLL_ABI,
         eventName: 'VoteRevealed',
         onLogs() {
-            console.log('Vote revealed (real-time)! Refetching tallies...');
             refetchTallies();
         },
     });
 
-    // Calculate totals
-    const totalRevealedStake = tallies?.reduce((acc, t) => acc + (t.result ? BigInt(t.result as any) : 0n), 0n) || 0n;
+    const totalRevealedStake = tallies?.reduce((acc, t) => acc + (t.result ? BigInt(String(t.result)) : 0n), 0n) || 0n;
 
     const hasVoted = userVotes > 0;
 
@@ -238,10 +261,10 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
         >
             <div className="grid grid-cols-2 gap-3">
                 {options.map((opt, idx) => {
-                    const votes = tallies?.[idx]?.result ? BigInt(tallies[idx].result as any) : 0n;
+                    const votes = tallies?.[idx]?.result ? BigInt(String(tallies[idx].result)) : 0n;
                     const percentage = totalRevealedStake > 0n ? Number((votes * 10000n) / totalRevealedStake) / 100 : 0;
                     const isWinner = totalRevealedStake > 0n && percentage > 0 && votes === (tallies?.reduce((max, t) => {
-                        const val = t.result ? BigInt(t.result as any) : 0n;
+                        const val = t.result ? BigInt(String(t.result)) : 0n;
                         return val > max ? val : max;
                     }, 0n));
 
@@ -299,7 +322,8 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
 
             <div className="bg-white rounded-[2.5rem] p-6 flex flex-col items-center justify-center gap-4 border-2 border-dashed border-gray-200 mt-2">
                 {hasVoted ? (
-                    <div className="w-full py-5 rounded-3xl bg-gray-100 text-gray-400 font-bold text-xl text-center cursor-not-allowed">
+                    <div className="w-full py-5 rounded-3xl bg-gray-100 text-gray-400 font-bold text-xl text-center cursor-not-allowed flex items-center justify-center gap-2">
+                        <CheckCircle size={20} />
                         ALREADY VOTED
                     </div>
                 ) : selected !== null ? (
@@ -308,23 +332,34 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
                             <button
                                 onClick={handleApprove}
                                 disabled={isApproving}
-                                className="w-full py-5 rounded-3xl bg-blue-600 text-white font-black text-xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+                                aria-label="Approve USDC spending"
+                                className="w-full py-5 rounded-3xl bg-blue-600 text-white font-black text-xl shadow-xl hover:bg-blue-700 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 flex items-center justify-center gap-3"
                             >
-                                {isApproving ? "APPROVING USDC..." : "1. APPROVE USDC"}
+                                {isApproving && (
+                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                )}
+                                {isApproving ? "APPROVING..." : "1. APPROVE USDC"}
                             </button>
                         ) : (
                             <button
                                 onClick={handleVote}
                                 disabled={isCommitting}
-                                className="w-full py-5 rounded-3xl bg-gray-900 text-white font-black text-xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+                                aria-label="Lock in your vote"
+                                className="w-full py-5 rounded-3xl bg-gray-900 text-white font-black text-xl shadow-xl hover:bg-gray-800 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-600 focus:ring-offset-2 flex items-center justify-center gap-3"
                             >
-                                {isCommitting ? "COMMITTING..." : "2. LOCK IT IN 🔒"}
+                                {isCommitting && (
+                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                )}
+                                {isCommitting ? "LOCKING IN..." : "LOCK IT IN 🔒"}
                             </button>
                         )}
+                        <p className="text-xs text-gray-400 text-center">
+                            Stake: 0.001 USDC per vote
+                        </p>
                     </>
                 ) : (
                     <p className="text-gray-400 font-bold text-center">
-                        {enabled ? "Tap an option above to predict!" : "Results will appear as they are revealed."}
+                        {enabled ? "Select an option above, then lock in your prediction" : "Voting has ended. Results are being revealed."}
                     </p>
                 )}
 
@@ -338,9 +373,8 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
                         </div>
                         {isPremium && (
                             <div className="flex items-center gap-2 px-3 py-1 bg-yellow-50 rounded-full border border-yellow-200">
-                                <Sparkles size={12} className="text-yellow-600" />
                                 <span className="text-[10px] font-bold text-yellow-700 uppercase">
-                                    Auto-Pilot Active
+                                    PRO: Auto-Reveal Enabled
                                 </span>
                             </div>
                         )}
