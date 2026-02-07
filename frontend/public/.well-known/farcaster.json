@@ -28,6 +28,6 @@
         "ogTitle": "Social Market",
         "ogDescription": "Predict the future with Social Market",
         "ogImageUrl": "https://social-predicts-hsiy.vercel.app/og.png",
-        "noindex": true
+        "noindex": false
     }
 }
