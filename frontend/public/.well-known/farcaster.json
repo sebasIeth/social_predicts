@@ -5,8 +5,8 @@
         "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEEJbZ22FqSdlMDhNaw8VApx4TqwKMn-90FIRQ-iMRPgWXhqPXHOa0aoOW6vL3cftfFq6eLjtrkC4ocY75ocCxQ4GwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     },
     "miniapp": {
-        "version": "1",
-        "name": "Social Market",
+        "version": "2",
+        "name": "Social Market Prediction",
         "homeUrl": "https://social-predicts-hsiy.vercel.app",
         "iconUrl": "https://social-predicts-hsiy.vercel.app/logo.png",
         "splashImageUrl": "https://social-predicts-hsiy.vercel.app/splash.png",
