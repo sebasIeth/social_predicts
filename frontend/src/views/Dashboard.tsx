@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { OpenfortButton, useSignOut } from "@openfort/react";
-import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, Ghost, Crown, LayoutDashboard, HelpCircle } from 'lucide-react';
+import { Sparkles, Trophy, Unlock, Zap, Wallet, CheckCircle, Crown, LayoutDashboard, HelpCircle } from 'lucide-react';
 import { useAccount, useConnect, useDisconnect, useReadContract, useWatchContractEvent } from 'wagmi';
 import { injected } from 'wagmi/connectors';
 import { formatUnits } from 'viem';
@@ -15,6 +15,9 @@ import { cn, formatTime } from '../utils';
 import { FeedbackModal } from '../components/ui/FeedbackModal';
 import { NavButton } from '../components/ui/NavButton';
 import { OnboardingModal } from '../components/ui/OnboardingModal';
+import { ThemeToggle } from '../components/ui/ThemeToggle';
+import { EmptyState } from '../components/ui/EmptyState';
+import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { VotingGrid } from '../components/dashboard/VotingGrid';
 import { RevealZone } from '../components/dashboard/RevealZone';
 import { LeaderboardView } from '../components/dashboard/LeaderboardView';
@@ -110,6 +113,41 @@ export function Dashboard() {
 
     // Create Poll Modal State
     const [isCreatePollModalOpen, setIsCreatePollModalOpen] = useState(false);
+
+    // Pending reveals count for badge
+    const [pendingRevealsCount, setPendingRevealsCount] = useState(0);
+    const [hasUrgentReveals, setHasUrgentReveals] = useState(false);
+
+    // Fetch pending reveals count
+    useEffect(() => {
+        const fetchPendingReveals = async () => {
+            if (!address) {
+                setPendingRevealsCount(0);
+                return;
+            }
+            try {
+                const res = await fetch(`${import.meta.env.VITE_API_URL}/api/votes/${address}/active-reveals`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setPendingRevealsCount(data.length);
+
+                    // Check if any reveal is about to expire (less than 1 hour)
+                    const now = Date.now() / 1000;
+                    const urgent = data.some((v: { revealEndTime?: number }) =>
+                        v.revealEndTime && (v.revealEndTime - now) < 3600
+                    );
+                    setHasUrgentReveals(urgent);
+                }
+            } catch {
+                // Failed to fetch
+            }
+        };
+
+        fetchPendingReveals();
+        // Refresh every 30 seconds
+        const interval = setInterval(fetchPendingReveals, 30000);
+        return () => clearInterval(interval);
+    }, [address]);
 
     // Derived Logic for Community Polls
     const filteredCommunityPolls = pollsList.filter(p => {
@@ -261,30 +299,33 @@ export function Dashboard() {
     };
 
     return (
-        <div className="md:flex md:items-center md:justify-center md:min-h-screen md:bg-zinc-200">
-            <div className="w-full h-full md:w-[414px] md:h-[860px] md:rounded-[3rem] md:border-[10px] md:border-zinc-900 md:shadow-2xl md:overflow-hidden bg-paper relative">
+        <div className="md:flex md:items-center md:justify-center md:min-h-screen md:bg-zinc-200 dark:md:bg-zinc-900">
+            <div className="w-full h-full md:w-[414px] md:h-[860px] md:rounded-[3rem] md:border-[10px] md:border-zinc-900 md:shadow-2xl md:overflow-hidden bg-paper dark:bg-paper-dark relative">
                 <div className="h-full overflow-y-auto scrollbar-hide">
-                    <div className="min-h-full pb-40 font-sans text-orange-950 selection:bg-candy-yellow/30">
+                    <div className="min-h-full pb-40 font-sans text-orange-950 dark:text-gray-100 selection:bg-candy-yellow/30">
                         {/* Playful Header */}
-                        <header className="px-6 pt-12 pb-6 flex justify-between items-center bg-white/50 backdrop-blur-sm sticky top-0 z-50">
+                        <header className="px-6 pt-12 pb-6 flex justify-between items-center bg-white/50 dark:bg-surface-dark/80 backdrop-blur-sm sticky top-0 z-50">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-candy-purple rounded-2xl rotate-3 flex items-center justify-center shadow-lg">
                                     <Sparkles className="text-white w-6 h-6" />
                                 </div>
                                 <div>
-                                    <h1 className="text-2xl font-display font-black text-gray-800 tracking-tight">Oracle</h1>
+                                    <h1 className="text-2xl font-display font-black text-gray-800 dark:text-white tracking-tight">Oracle</h1>
                                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Polls</p>
                                 </div>
                             </div>
 
                             <div className="flex items-center gap-2">
+                                {/* Theme Toggle */}
+                                <ThemeToggle />
+
                                 {/* Help Button */}
                                 <button
                                     onClick={() => setShowOnboarding(true)}
-                                    className="p-2 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+                                    className="p-2 bg-gray-100 dark:bg-surface-dark rounded-xl hover:bg-gray-200 dark:hover:bg-card-dark transition-colors"
                                     aria-label="Show help"
                                 >
-                                    <HelpCircle size={18} className="text-gray-500" />
+                                    <HelpCircle size={18} className="text-gray-500 dark:text-gray-400" />
                                 </button>
 
                                 {!isMiniApp ? (
@@ -334,21 +375,21 @@ export function Dashboard() {
                                     className="space-y-4"
                                 >
                                     {/* Hero Skeleton */}
-                                    <div className="bg-white rounded-[2.5rem] p-8 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] border-b-8 border-gray-100 animate-pulse">
+                                    <div className="bg-white dark:bg-card-dark rounded-[2.5rem] p-8 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] border-b-8 border-gray-100 dark:border-gray-800 animate-pulse">
                                         <div className="flex items-center gap-2 mb-4">
-                                            <div className="h-6 w-24 bg-gray-200 rounded-full"></div>
-                                            <div className="h-4 w-20 bg-gray-100 rounded"></div>
+                                            <div className="h-6 w-24 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+                                            <div className="h-4 w-20 bg-gray-100 dark:bg-gray-800 rounded"></div>
                                         </div>
-                                        <div className="h-8 w-3/4 bg-gray-200 rounded-lg mb-4"></div>
-                                        <div className="h-6 w-1/2 bg-gray-100 rounded-lg"></div>
+                                        <div className="h-8 w-3/4 bg-gray-200 dark:bg-gray-700 rounded-lg mb-4"></div>
+                                        <div className="h-6 w-1/2 bg-gray-100 dark:bg-gray-800 rounded-lg"></div>
                                     </div>
 
                                     {/* Options Skeleton */}
                                     <div className="grid grid-cols-2 gap-3">
                                         {[1, 2].map((i) => (
-                                            <div key={i} className="bg-white p-6 rounded-[2rem] border-2 border-gray-100 animate-pulse">
-                                                <div className="h-6 w-full bg-gray-200 rounded mb-2"></div>
-                                                <div className="h-4 w-1/2 bg-gray-100 rounded"></div>
+                                            <div key={i} className="bg-white dark:bg-card-dark p-6 rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 animate-pulse">
+                                                <div className="h-6 w-full bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
+                                                <div className="h-4 w-1/2 bg-gray-100 dark:bg-gray-800 rounded"></div>
                                             </div>
                                         ))}
                                     </div>
@@ -359,7 +400,7 @@ export function Dashboard() {
                             {activeTab !== 'LEADERBOARD' && activeTab !== 'PROFILE' && activeTab !== 'MYPOLLS' && !(pollType === 'community' && selectedPollId === null) && activePollId >= 0 && !isLoadingList && pollData && (
                                 <motion.div
                                     layout
-                                    className="bg-white rounded-[2.5rem] p-8 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] border-b-8 border-gray-100 relative overflow-hidden"
+                                    className="bg-white dark:bg-card-dark rounded-[2.5rem] p-8 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] border-b-8 border-gray-100 dark:border-gray-800 relative overflow-hidden"
                                 >
                                     <div className="absolute top-0 right-0 w-32 h-32 bg-candy-yellow/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
 
@@ -378,7 +419,7 @@ export function Dashboard() {
                                         </span>
                                     </div>
 
-                                    <h2 className="text-3xl font-display font-bold leading-tight mb-6 text-gray-800">
+                                    <h2 className="text-3xl font-display font-bold leading-tight mb-6 text-gray-800 dark:text-white">
                                         {(typeof pollData[1] === 'string' && pollData[1].trim())
                                             ? pollData[1]
                                             : (activePollFromDb?.title || "Loading...")}
@@ -396,7 +437,7 @@ export function Dashboard() {
 
                                     {/* Stake Info */}
                                     <div className="flex flex-col items-start gap-3 mb-8">
-                                        <div className="px-3 py-1 bg-gray-50 rounded-lg text-xs font-bold text-gray-500">
+                                        <div className="px-3 py-1 bg-gray-50 dark:bg-surface-dark rounded-lg text-xs font-bold text-gray-500 dark:text-gray-400">
                                             Total Stake: {pollData ? formatUnits(pollData[4], 6) : '0'} USDC
                                         </div>
 
@@ -432,7 +473,9 @@ export function Dashboard() {
                                         exit={{ opacity: 0, scale: 0.95 }}
                                         className="min-h-full"
                                     >
-                                        <MyPollsView />
+                                        <ErrorBoundary sectionName="My Polls" autoRetry autoRetryDelay={3000}>
+                                            <MyPollsView />
+                                        </ErrorBoundary>
                                     </motion.div>
                                 )}
 
@@ -447,12 +490,12 @@ export function Dashboard() {
                                     >
 
                                         {/* Community / Official Toggle */}
-                                        <div className="flex p-1 bg-gray-100 rounded-2xl mb-4">
+                                        <div className="flex p-1 bg-gray-100 dark:bg-surface-dark rounded-2xl mb-4">
                                             <button
                                                 onClick={() => { setPollType('official'); setSelectedPollId(null); setPollsList([]); }}
                                                 className={cn(
                                                     "flex-1 py-3 rounded-xl font-bold text-sm transition-all",
-                                                    pollType === 'official' ? "bg-white text-gray-800 shadow-sm" : "text-gray-400 hover:text-gray-600"
+                                                    pollType === 'official' ? "bg-white dark:bg-card-dark text-gray-800 dark:text-white shadow-sm" : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                                                 )}
                                             >
                                                 OFFICIAL
@@ -461,7 +504,7 @@ export function Dashboard() {
                                                 onClick={() => { setPollType('community'); setSelectedPollId(null); setPollsList([]); }}
                                                 className={cn(
                                                     "flex-1 py-3 rounded-xl font-bold text-sm transition-all",
-                                                    pollType === 'community' ? "bg-white text-gray-800 shadow-sm" : "text-gray-400 hover:text-gray-600"
+                                                    pollType === 'community' ? "bg-white dark:bg-card-dark text-gray-800 dark:text-white shadow-sm" : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                                                 )}
                                             >
                                                 COMMUNITY
@@ -479,7 +522,7 @@ export function Dashboard() {
                                                             onClick={() => { setCommunityFilter(f); setCommunityPage(1); }}
                                                             className={cn(
                                                                 "px-3 py-1 rounded-full text-[10px] font-bold transition-colors whitespace-nowrap",
-                                                                communityFilter === f ? "bg-black text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                                                                communityFilter === f ? "bg-black dark:bg-white text-white dark:text-black" : "bg-gray-100 dark:bg-surface-dark text-gray-400 hover:bg-gray-200 dark:hover:bg-card-dark"
                                                             )}
                                                         >
                                                             {f}
@@ -490,13 +533,13 @@ export function Dashboard() {
                                                 {isLoadingList && (
                                                     <div className="space-y-3">
                                                         {[1, 2, 3].map((i) => (
-                                                            <div key={i} className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 animate-pulse">
+                                                            <div key={i} className="bg-white dark:bg-card-dark p-6 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-800 animate-pulse">
                                                                 <div className="flex justify-between items-start mb-3">
-                                                                    <div className="h-4 w-16 bg-gray-200 rounded"></div>
-                                                                    <div className="h-5 w-20 bg-gray-100 rounded-lg"></div>
+                                                                    <div className="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                                                                    <div className="h-5 w-20 bg-gray-100 dark:bg-gray-800 rounded-lg"></div>
                                                                 </div>
-                                                                <div className="h-6 w-3/4 bg-gray-200 rounded mb-2"></div>
-                                                                <div className="h-4 w-1/2 bg-gray-100 rounded"></div>
+                                                                <div className="h-6 w-3/4 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
+                                                                <div className="h-4 w-1/2 bg-gray-100 dark:bg-gray-800 rounded"></div>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -549,22 +592,16 @@ export function Dashboard() {
                                                                 )}
                                                             </>
                                                         ) : (
-                                                            <div className="border-4 border-dashed border-gray-200 rounded-[2.5rem] p-10 flex flex-col items-center justify-center bg-gray-50/50 mt-4">
-                                                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                                                                    <Ghost className="w-8 h-8 text-gray-400" />
-                                                                </div>
-                                                                <h3 className="text-xl font-display font-bold text-gray-800 mb-2">
-                                                                    No polls match filter
-                                                                </h3>
-                                                                <p className="text-gray-400 text-sm font-bold mb-6 max-w-[200px] leading-relaxed text-center">
-                                                                    Try changing the filter to see more results.
-                                                                </p>
-                                                                <button
-                                                                    onClick={() => { setCommunityFilter('ALL'); setCommunityPage(1); }}
-                                                                    className="px-6 py-3 bg-white border-2 border-gray-200 text-gray-600 rounded-xl font-bold hover:border-gray-300 hover:text-gray-800 transition-colors"
-                                                                >
-                                                                    Clear Filters
-                                                                </button>
+                                                            <div className="border-4 border-dashed border-gray-200 dark:border-gray-700 rounded-[2.5rem] bg-gray-50/50 dark:bg-card-dark/50 mt-4">
+                                                                <EmptyState
+                                                                    type="no-community"
+                                                                    title="No Polls Found"
+                                                                    description="No polls match your filter. Try changing or clearing the filter."
+                                                                    action={{
+                                                                        label: "Clear Filters",
+                                                                        onClick: () => { setCommunityFilter('ALL'); setCommunityPage(1); }
+                                                                    }}
+                                                                />
                                                             </div>
                                                         )}
                                                     </>
@@ -586,10 +623,10 @@ export function Dashboard() {
                                                         <div
                                                             key={p.contractPollId}
                                                             onClick={() => setSelectedPollId(p.contractPollId)}
-                                                            className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 cursor-pointer hover:scale-[1.02] transition-transform active:scale-95 group relative overflow-hidden"
+                                                            className="bg-white dark:bg-card-dark p-6 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-800 cursor-pointer hover:scale-[1.02] transition-transform active:scale-95 group relative overflow-hidden"
                                                         >
                                                             <div className="flex justify-between items-start mb-2">
-                                                                <span className="px-2 py-1 bg-gray-50 rounded-lg text-[10px] font-black text-gray-400 uppercase tracking-wider">
+                                                                <span className="px-2 py-1 bg-gray-50 dark:bg-surface-dark rounded-lg text-[10px] font-black text-gray-400 uppercase tracking-wider">
                                                                     #{p.contractPollId}
                                                                 </span>
                                                                 <span className={cn(
@@ -599,7 +636,7 @@ export function Dashboard() {
                                                                     {phaseLabel}
                                                                 </span>
                                                             </div>
-                                                            <h3 className="font-display font-bold text-xl text-gray-800 mb-4 group-hover:text-candy-purple transition-colors">
+                                                            <h3 className="font-display font-bold text-xl text-gray-800 dark:text-white mb-4 group-hover:text-candy-purple transition-colors">
                                                                 {p.title}
                                                             </h3>
                                                             <div className="flex justify-between items-center text-xs font-bold text-gray-400">
@@ -620,17 +657,17 @@ export function Dashboard() {
                                                         <button
                                                             disabled={communityPage === 1}
                                                             onClick={() => setCommunityPage(p => Math.max(1, p - 1))}
-                                                            className="text-xs font-bold text-gray-400 disabled:opacity-30 hover:text-gray-800"
+                                                            className="text-xs font-bold text-gray-400 disabled:opacity-30 hover:text-gray-800 dark:hover:text-white"
                                                         >
                                                             Previous
                                                         </button>
-                                                        <span className="text-xs font-black text-gray-300">
+                                                        <span className="text-xs font-black text-gray-300 dark:text-gray-600">
                                                             P. {communityPage} / {totalPages}
                                                         </span>
                                                         <button
                                                             disabled={communityPage === totalPages}
                                                             onClick={() => setCommunityPage(p => Math.min(totalPages, p + 1))}
-                                                            className="text-xs font-bold text-gray-400 disabled:opacity-30 hover:text-gray-800"
+                                                            className="text-xs font-bold text-gray-400 disabled:opacity-30 hover:text-gray-800 dark:hover:text-white"
                                                         >
                                                             Next
                                                         </button>
@@ -643,7 +680,7 @@ export function Dashboard() {
                                                 {pollType === 'official' && selectedPollId !== null && (
                                                     <button
                                                         onClick={() => setSelectedPollId(null)}
-                                                        className="mb-2 text-xs font-bold text-gray-400 hover:text-gray-600 flex items-center gap-1"
+                                                        className="mb-2 text-xs font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex items-center gap-1"
                                                     >
                                                         ← Back to Latest
                                                     </button>
@@ -662,26 +699,28 @@ export function Dashboard() {
                                                 {/* Active Poll Card */}
                                                 {pollData ? (
                                                     <>
-                                                        <VotingGrid
-                                                            key="vote"
-                                                            pollId={activePollId}
-                                                            options={options || []}
-                                                            enabled={phase === 'COMMIT'}
-                                                            onSuccess={showSuccess}
-                                                            onError={showError}
-                                                            onVoteSuccess={() => {
-                                                                refetchPoll();
-                                                            }}
-                                                        />
+                                                        <ErrorBoundary sectionName="Voting" autoRetry autoRetryDelay={3000}>
+                                                            <VotingGrid
+                                                                key="vote"
+                                                                pollId={activePollId}
+                                                                options={options || []}
+                                                                enabled={phase === 'COMMIT'}
+                                                                onSuccess={showSuccess}
+                                                                onError={showError}
+                                                                onVoteSuccess={() => {
+                                                                    refetchPoll();
+                                                                }}
+                                                            />
+                                                        </ErrorBoundary>
 
                                                         {/* History / Past Polls List (Official Only) */}
                                                         {pollType === 'official' && (
                                                             <div className="mt-8 space-y-4">
                                                                 <div className="flex items-center gap-2 px-2 mb-4">
-                                                                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                                                                    <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-surface-dark flex items-center justify-center">
                                                                         <Sparkles className="w-4 h-4 text-gray-400" />
                                                                     </div>
-                                                                    <h3 className="font-display font-bold text-gray-800 text-lg">More Polls</h3>
+                                                                    <h3 className="font-display font-bold text-gray-800 dark:text-white text-lg">More Polls</h3>
                                                                 </div>
 
                                                                 {paginatedHistoryPolls.map((p) => {
@@ -690,27 +729,27 @@ export function Dashboard() {
                                                                         <div
                                                                             key={p.contractPollId}
                                                                             onClick={() => setSelectedPollId(p.contractPollId)}
-                                                                            className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 cursor-pointer hover:scale-[1.01] transition-all active:scale-95 group relative overflow-hidden"
+                                                                            className="bg-white dark:bg-card-dark p-5 rounded-[1.5rem] shadow-sm border border-gray-100 dark:border-gray-800 cursor-pointer hover:scale-[1.01] transition-all active:scale-95 group relative overflow-hidden"
                                                                         >
                                                                             <div className="flex justify-between items-start mb-2">
-                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50 px-2 py-1 rounded-lg">
+                                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-surface-dark px-2 py-1 rounded-lg">
                                                                                     #{p.contractPollId}
                                                                                 </span>
                                                                                 {isExpired ? (
-                                                                                    <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-2 py-1 rounded-lg">
+                                                                                    <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400 uppercase bg-gray-100 dark:bg-surface-dark px-2 py-1 rounded-lg">
                                                                                         <CheckCircle size={10} /> Ended
                                                                                     </span>
                                                                                 ) : (
-                                                                                    <span className="flex items-center gap-1 text-[10px] font-bold text-green-600 uppercase bg-green-100 px-2 py-1 rounded-lg animate-pulse">
+                                                                                    <span className="flex items-center gap-1 text-[10px] font-bold text-green-600 uppercase bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded-lg animate-pulse">
                                                                                         <Zap size={10} /> Live
                                                                                     </span>
                                                                                 )}
                                                                             </div>
                                                                             <div className="flex justify-between items-center gap-4">
-                                                                                <h4 className="font-bold text-gray-800 line-clamp-1 group-hover:text-candy-purple transition-colors text-sm">
+                                                                                <h4 className="font-bold text-gray-800 dark:text-white line-clamp-1 group-hover:text-candy-purple transition-colors text-sm">
                                                                                     {p.title}
                                                                                 </h4>
-                                                                                <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-candy-purple group-hover:text-white transition-colors shrink-0">
+                                                                                <div className="w-8 h-8 rounded-full bg-gray-50 dark:bg-surface-dark flex items-center justify-center group-hover:bg-candy-purple group-hover:text-white transition-colors shrink-0">
                                                                                     <div className="i-lucide-arrow-right w-4 h-4" />
                                                                                 </div>
                                                                             </div>
@@ -728,17 +767,17 @@ export function Dashboard() {
                                                                         <button
                                                                             disabled={historyPage === 1}
                                                                             onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
-                                                                            className="text-xs font-bold text-gray-400 disabled:opacity-30 hover:text-gray-800"
+                                                                            className="text-xs font-bold text-gray-400 disabled:opacity-30 hover:text-gray-800 dark:hover:text-white"
                                                                         >
                                                                             Prev
                                                                         </button>
-                                                                        <span className="text-xs font-black text-gray-300">
+                                                                        <span className="text-xs font-black text-gray-300 dark:text-gray-600">
                                                                             {historyPage} / {totalHistoryPages}
                                                                         </span>
                                                                         <button
                                                                             disabled={historyPage === totalHistoryPages}
                                                                             onClick={() => setHistoryPage(p => Math.min(totalHistoryPages, p + 1))}
-                                                                            className="text-xs font-bold text-gray-400 disabled:opacity-30 hover:text-gray-800"
+                                                                            className="text-xs font-bold text-gray-400 disabled:opacity-30 hover:text-gray-800 dark:hover:text-white"
                                                                         >
                                                                             Next
                                                                         </button>
@@ -754,32 +793,26 @@ export function Dashboard() {
                                                                 {/* Voting Grid Skeleton */}
                                                                 <div className="grid grid-cols-2 gap-3">
                                                                     {[1, 2].map((i) => (
-                                                                        <div key={i} className="bg-white p-6 rounded-[2rem] border-2 border-gray-100 animate-pulse">
-                                                                            <div className="h-6 w-full bg-gray-200 rounded mb-3"></div>
-                                                                            <div className="h-4 w-1/2 bg-gray-100 rounded"></div>
+                                                                        <div key={i} className="bg-white dark:bg-card-dark p-6 rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 animate-pulse">
+                                                                            <div className="h-6 w-full bg-gray-200 dark:bg-gray-700 rounded mb-3"></div>
+                                                                            <div className="h-4 w-1/2 bg-gray-100 dark:bg-gray-800 rounded"></div>
                                                                         </div>
                                                                     ))}
                                                                 </div>
                                                                 {/* Button Skeleton */}
-                                                                <div className="h-14 w-full bg-gray-200 rounded-2xl animate-pulse"></div>
+                                                                <div className="h-14 w-full bg-gray-200 dark:bg-gray-700 rounded-2xl animate-pulse"></div>
                                                             </div>
                                                         ) : (
-                                                            <div className="border-4 border-dashed border-gray-200 rounded-[2.5rem] p-10 flex flex-col items-center justify-center bg-gray-50/50">
-                                                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                                                                    <Ghost className="w-8 h-8 text-gray-400" />
-                                                                </div>
-                                                                <h3 className="text-xl font-display font-bold text-gray-800 mb-2">
-                                                                    No polls found
-                                                                </h3>
-                                                                <p className="text-gray-400 text-sm font-bold mb-6 max-w-[200px] leading-relaxed">
-                                                                    There are no official polls active right now.
-                                                                </p>
-                                                                <button
-                                                                    onClick={() => { setPollType('community'); setSelectedPollId(null); }}
-                                                                    className="px-6 py-3 bg-white border-2 border-gray-200 text-gray-600 rounded-xl font-bold hover:border-gray-300 hover:text-gray-800 transition-colors"
-                                                                >
-                                                                    Check Community Polls
-                                                                </button>
+                                                            <div className="border-4 border-dashed border-gray-200 dark:border-gray-700 rounded-[2.5rem] bg-gray-50/50 dark:bg-card-dark/50">
+                                                                <EmptyState
+                                                                    type="no-polls"
+                                                                    title="No Official Polls"
+                                                                    description="There are no official polls active right now. Check out community polls!"
+                                                                    action={{
+                                                                        label: "View Community Polls",
+                                                                        onClick: () => { setPollType('community'); setSelectedPollId(null); }
+                                                                    }}
+                                                                />
                                                             </div>
                                                         )}
                                                     </div>
@@ -790,22 +823,30 @@ export function Dashboard() {
                                     </motion.div>
                                 )}
                                 {activeTab === 'REVEAL' && (
-                                    <RevealZone
-                                        key="reveal"
-                                        onSuccess={showSuccess}
-                                        onError={showError}
-                                    />
+                                    <ErrorBoundary sectionName="Reveal Zone" autoRetry autoRetryDelay={3000}>
+                                        <RevealZone
+                                            key="reveal"
+                                            onSuccess={showSuccess}
+                                            onError={showError}
+                                        />
+                                    </ErrorBoundary>
                                 )}
-                                {activeTab === 'LEADERBOARD' && <LeaderboardView key="leader" />}
+                                {activeTab === 'LEADERBOARD' && (
+                                    <ErrorBoundary sectionName="Leaderboard" autoRetry autoRetryDelay={3000}>
+                                        <LeaderboardView key="leader" />
+                                    </ErrorBoundary>
+                                )}
                                 {activeTab === 'PROFILE' && (
-                                    <ProfileView
-                                        key="profile"
-                                        address={address}
-                                        now={now}
-                                        onSuccess={showSuccess}
-                                        onError={showError}
-                                        onLogout={handleLogout}
-                                    />
+                                    <ErrorBoundary sectionName="Profile" autoRetry autoRetryDelay={3000}>
+                                        <ProfileView
+                                            key="profile"
+                                            address={address}
+                                            now={now}
+                                            onSuccess={showSuccess}
+                                            onError={showError}
+                                            onLogout={handleLogout}
+                                        />
+                                    </ErrorBoundary>
                                 )}
                             </AnimatePresence>
 
@@ -815,10 +856,10 @@ export function Dashboard() {
 
                 {/* Floating Bottom Nav */}
                 <nav className={cn(
-                    "bg-white/90 backdrop-blur-md flex justify-between items-center z-50 transition-all",
+                    "bg-white/90 dark:bg-card-dark/95 backdrop-blur-md flex justify-between items-center z-50 transition-all",
                     isMiniApp
-                        ? "fixed bottom-0 left-0 right-0 px-8 py-5 pb-8 rounded-t-[2.5rem] border-t border-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]"
-                        : "absolute bottom-6 left-6 right-6 p-2 rounded-[2rem] shadow-[0_20px_40px_-5px_rgba(0,0,0,0.1)] border border-white/50 bg-white/90"
+                        ? "fixed bottom-0 left-0 right-0 px-8 py-5 pb-8 rounded-t-[2.5rem] border-t border-gray-100 dark:border-gray-800 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]"
+                        : "absolute bottom-6 left-6 right-6 p-2 rounded-[2rem] shadow-[0_20px_40px_-5px_rgba(0,0,0,0.1)] border border-white/50 dark:border-gray-800 bg-white/90 dark:bg-card-dark/95"
                 )}>
                     <NavButton
                         active={activeTab === 'VOTE'}
@@ -833,6 +874,8 @@ export function Dashboard() {
                         icon={<Unlock />}
                         label="Reveal"
                         color="bg-candy-yellow"
+                        badge={pendingRevealsCount > 0 ? pendingRevealsCount : undefined}
+                        urgent={hasUrgentReveals}
                     />
                     <NavButton
                         active={activeTab === 'LEADERBOARD'}

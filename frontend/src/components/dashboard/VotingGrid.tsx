@@ -250,7 +250,7 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
 
     const hasVoted = userVotes > 0;
 
-    if (options.length === 0) return <div className="p-8 text-center text-gray-400">No options available</div>;
+    if (options.length === 0) return <div className="p-8 text-center text-gray-400 dark:text-gray-500">No options available</div>;
 
     return (
         <motion.div
@@ -282,9 +282,9 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
                                 "p-6 rounded-[2rem] text-left transition-all duration-200 relative overflow-hidden group border-2",
                                 selected === idx
                                     ? "bg-candy-purple text-white shadow-xl shadow-candy-purple/30 scale-[1.02] border-transparent"
-                                    : "bg-white text-gray-600 border-transparent",
+                                    : "bg-white dark:bg-card-dark text-gray-600 dark:text-gray-300 border-transparent",
                                 (!enabled || hasVoted) && "opacity-80 cursor-not-allowed",
-                                !hasVoted && enabled && selected !== idx && "hover:bg-gray-50 hover:border-gray-100"
+                                !hasVoted && enabled && selected !== idx && "hover:bg-gray-50 dark:hover:bg-surface-dark hover:border-gray-100 dark:hover:border-gray-700"
                             )}
                         >
                             {/* Progress Bar Background */}
@@ -304,7 +304,7 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
                                 {/* Results Logic: Show if voting is disabled (aka REVEAL/RESULT phase) or if user voted */}
                                 {!enabled && (
                                     <div className="flex items-center gap-2 mt-2">
-                                        <span className="text-xs font-black bg-gray-100 px-2 py-1 rounded-lg text-gray-500">
+                                        <span className="text-xs font-black bg-gray-100 dark:bg-surface-dark px-2 py-1 rounded-lg text-gray-500 dark:text-gray-400">
                                             {formatUnits(votes, 6)} USDC
                                         </span>
                                         <span className="text-xs font-bold text-gray-400">
@@ -325,9 +325,9 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
                 })}
             </div>
 
-            <div className="bg-white rounded-[2.5rem] p-6 flex flex-col items-center justify-center gap-4 border-2 border-dashed border-gray-200 mt-2">
+            <div className="bg-white dark:bg-card-dark rounded-[2.5rem] p-6 flex flex-col items-center justify-center gap-4 border-2 border-dashed border-gray-200 dark:border-gray-700 mt-2">
                 {hasVoted ? (
-                    <div className="w-full py-5 rounded-3xl bg-gray-100 text-gray-400 font-bold text-xl text-center cursor-not-allowed flex items-center justify-center gap-2">
+                    <div className="w-full py-5 rounded-3xl bg-gray-100 dark:bg-surface-dark text-gray-400 font-bold text-xl text-center cursor-not-allowed flex items-center justify-center gap-2">
                         <CheckCircle size={20} />
                         ALREADY VOTED
                     </div>
@@ -377,8 +377,8 @@ export function VotingGrid({ pollId, options, enabled, onSuccess, onError, onVot
                             </span>
                         </div>
                         {isPremium && (
-                            <div className="flex items-center gap-2 px-3 py-1 bg-yellow-50 rounded-full border border-yellow-200">
-                                <span className="text-[10px] font-bold text-yellow-700 uppercase">
+                            <div className="flex items-center gap-2 px-3 py-1 bg-yellow-50 dark:bg-yellow-900/20 rounded-full border border-yellow-200 dark:border-yellow-800">
+                                <span className="text-[10px] font-bold text-yellow-700 dark:text-yellow-400 uppercase">
                                     PRO: Auto-Reveal Enabled
                                 </span>
                             </div>

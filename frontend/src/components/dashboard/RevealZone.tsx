@@ -1,8 +1,9 @@
 
 import { useState, useEffect } from 'react';
-import { PartyPopper, AlertCircle, Unlock } from 'lucide-react';
+import { AlertCircle, Unlock } from 'lucide-react';
 import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
 import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI } from '../../constants';
+import { EmptyState } from '../ui/EmptyState';
 
 interface RevealZoneProps {
     onSuccess: (title: string, message: string) => void;
@@ -68,28 +69,30 @@ export function RevealZone({ onSuccess, onError }: RevealZoneProps) {
 
     if (activeReveals.length === 0) {
         return (
-            <div className="bg-white/50 rounded-[2.5rem] p-8 text-center border-2 border-dashed border-gray-200">
-                <PartyPopper size={48} className="mx-auto mb-4 text-gray-300" />
-                <p className="text-gray-400 font-bold">No votes to reveal right now.</p>
-                <p className="text-xs text-gray-400 mt-2">Come back when a poll ends!</p>
+            <div className="bg-white/50 dark:bg-card-dark/50 rounded-[2.5rem] border-2 border-dashed border-gray-200 dark:border-gray-700">
+                <EmptyState
+                    type="no-reveals"
+                    title="All Clear!"
+                    description="No votes to reveal right now. Come back when a poll enters the reveal phase!"
+                />
             </div>
         );
     }
 
     return (
         <div className="space-y-4">
-            <div className="bg-yellow-50 p-4 rounded-3xl mb-4 flex items-center gap-3">
-                <AlertCircle className="text-yellow-600" />
-                <p className="text-xs font-bold text-yellow-700">these votes are ready to be revealed!</p>
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-3xl mb-4 flex items-center gap-3 border border-yellow-200 dark:border-yellow-800">
+                <AlertCircle className="text-yellow-600 dark:text-yellow-500" />
+                <p className="text-xs font-bold text-yellow-700 dark:text-yellow-400">These votes are ready to be revealed!</p>
             </div>
 
             {activeReveals.map((v) => {
                 const revealKey = `${v.pollId}-${v.commitmentIndex}`;
                 return (
-                    <div key={revealKey} className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col gap-3">
+                    <div key={revealKey} className="bg-white dark:bg-card-dark p-6 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col gap-3">
                         <div className="flex justify-between items-start">
                             <div>
-                                <h4 className="font-bold text-gray-800">{v.pollTitle}</h4>
+                                <h4 className="font-bold text-gray-800 dark:text-white">{v.pollTitle}</h4>
                                 <p className="text-xs text-gray-400 font-bold uppercase mt-1">You Voted: Option {Number(v.optionIndex) + 1}</p>
                             </div>
                         </div>

@@ -4,6 +4,7 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  darkMode: 'class',
   theme: {
     extend: {
       fontFamily: {
@@ -19,6 +20,9 @@ export default {
           blue: '#60a5fa',
         },
         paper: '#fffbeb',
+        'paper-dark': '#1a1a2e',
+        'card-dark': '#252542',
+        'surface-dark': '#16162a',
       },
       borderRadius: {
         '4xl': '2.5rem',

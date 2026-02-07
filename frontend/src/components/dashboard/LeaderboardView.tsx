@@ -47,7 +47,7 @@ export function LeaderboardView() {
 
     if (loading) return (
         <div className="flex flex-col items-center justify-center h-64 space-y-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
             <p className="text-gray-400 font-medium">Loading Rankings...</p>
         </div>
     );
@@ -125,19 +125,19 @@ export function LeaderboardView() {
 
 function LeaderboardRow({ user, index }: { user: LeaderboardUser, index: number }) {
     return (
-        <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between">
+        <div className="bg-white dark:bg-card-dark p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 flex items-center justify-between">
             <div className="flex items-center space-x-4">
                 <div className={cn(
                     "w-10 h-10 rounded-full flex items-center justify-center font-black text-sm border-2",
-                    index === 0 ? "bg-yellow-100 text-yellow-600 border-yellow-200" :
-                        index === 1 ? "bg-gray-100 text-gray-500 border-gray-200" :
-                            index === 2 ? "bg-orange-100 text-orange-600 border-orange-200" :
-                                "bg-blue-50 text-blue-500 border-blue-100"
+                    index === 0 ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800" :
+                        index === 1 ? "bg-gray-100 dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700" :
+                            index === 2 ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800" :
+                                "bg-blue-50 dark:bg-blue-900/30 text-blue-500 dark:text-blue-400 border-blue-100 dark:border-blue-800"
                 )}>
                     #{index + 1}
                 </div>
                 <div>
-                    <p className="font-bold text-gray-800 text-sm">
+                    <p className="font-bold text-gray-800 dark:text-white text-sm">
                         {user.alias.startsWith('0x') ? `${user.alias.slice(0, 6)}...${user.alias.slice(-4)}` : user.alias}
                         {index === 0 && " 👑"}
                     </p>
@@ -148,11 +148,11 @@ function LeaderboardRow({ user, index }: { user: LeaderboardUser, index: number 
             </div>
 
             <div className="text-right">
-                <p className="font-black text-gray-800 text-lg">{user.gamesWon} Wins</p>
+                <p className="font-black text-gray-800 dark:text-white text-lg">{user.gamesWon} Wins</p>
                 <div className="flex items-center justify-end space-x-1">
                     <span className={cn(
                         "text-xs font-bold px-2 py-0.5 rounded-full",
-                        parseFloat(user.winRate) >= 50 ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-500"
+                        parseFloat(user.winRate) >= 50 ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400" : "bg-gray-100 dark:bg-gray-800 text-gray-500"
                     )}>
                         {user.winRate}% WR
                     </span>

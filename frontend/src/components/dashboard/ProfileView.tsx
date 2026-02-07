@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Trophy, Gavel, CheckCircle, AlertTriangle, X } from 'lucide-react';
+import { EmptyState } from '../ui/EmptyState';
 import { useReadContract, useWriteContract, usePublicClient } from 'wagmi';
 import { type Hex } from 'viem';
 import { ORACLE_POLL_ADDRESS, ORACLE_POLL_ABI } from '../../constants';
@@ -436,7 +437,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
         fetchHistory();
     }, [address]);
 
-    if (!address) return <div className="p-8 text-center font-bold text-gray-400">Please connect your wallet to view your profile.</div>;
+    if (!address) return <div className="p-8 text-center font-bold text-gray-400 dark:text-gray-500">Please connect your wallet to view your profile.</div>;
 
     const totalWon = history.length * 0.001; // Mock calculation based on stake
 
@@ -444,22 +445,22 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
     const VoteHistorySkeleton = () => (
         <div className="space-y-4">
             {[1, 2, 3].map((i) => (
-                <div key={i} className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 animate-pulse">
+                <div key={i} className="bg-white dark:bg-card-dark p-6 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-800 animate-pulse">
                     {/* Header skeleton */}
                     <div className="flex justify-between items-center mb-4">
-                        <div className="h-3 w-16 bg-gray-200 rounded"></div>
-                        <div className="h-3 w-24 bg-gray-200 rounded"></div>
+                        <div className="h-3 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                        <div className="h-3 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
                     </div>
                     {/* Title skeleton */}
-                    <div className="h-5 w-3/4 bg-gray-200 rounded mb-3"></div>
+                    <div className="h-5 w-3/4 bg-gray-200 dark:bg-gray-700 rounded mb-3"></div>
                     {/* Tags skeleton */}
                     <div className="flex gap-2 mb-4">
-                        <div className="h-5 w-20 bg-gray-100 rounded"></div>
-                        <div className="h-5 w-24 bg-gray-100 rounded"></div>
-                        <div className="h-5 w-16 bg-gray-100 rounded"></div>
+                        <div className="h-5 w-20 bg-gray-100 dark:bg-gray-800 rounded"></div>
+                        <div className="h-5 w-24 bg-gray-100 dark:bg-gray-800 rounded"></div>
+                        <div className="h-5 w-16 bg-gray-100 dark:bg-gray-800 rounded"></div>
                     </div>
                     {/* Button skeleton */}
-                    <div className="h-12 w-full bg-gray-200 rounded-xl"></div>
+                    <div className="h-12 w-full bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
                 </div>
             ))}
         </div>
@@ -474,7 +475,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
         >
             <div className="flex items-center justify-between px-2">
                 <div>
-                    <h2 className="text-2xl font-display font-black text-gray-800">Your Profile</h2>
+                    <h2 className="text-2xl font-display font-black text-gray-800 dark:text-white">Your Profile</h2>
                     <p className="text-gray-400 font-bold text-xs uppercase tracking-wider">Stats & History</p>
                 </div>
                 <PremiumStatus />
@@ -499,20 +500,20 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                 onError={(t, m) => onError(t, m)}
             />
             {/* Stats Card */}
-            <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-gray-100 grid grid-cols-2 gap-4">
+            <div className="bg-white dark:bg-card-dark rounded-[2.5rem] p-8 shadow-sm border border-gray-100 dark:border-gray-800 grid grid-cols-2 gap-4">
                 <div className="text-center">
                     <p className="text-xs font-bold text-gray-400 uppercase mb-1">Total Votes</p>
-                    <p className="text-3xl font-display font-black text-gray-800">{history.length}</p>
+                    <p className="text-3xl font-display font-black text-gray-800 dark:text-white">{history.length}</p>
                 </div>
                 <div className="text-center">
                     <p className="text-xs font-bold text-gray-400 uppercase mb-1">Est. Won</p>
                     <p className="text-3xl font-display font-black text-candy-mint">{totalWon.toFixed(3)} USDC</p>
                 </div>
                 {onLogout && (
-                    <div className="col-span-2 pt-4 border-t border-gray-100 mt-2">
+                    <div className="col-span-2 pt-4 border-t border-gray-100 dark:border-gray-700 mt-2">
                         <button
                             onClick={onLogout}
-                            className="w-full py-3 bg-gray-100 text-gray-400 font-bold rounded-xl hover:bg-red-50 hover:text-red-500 transition-all flex items-center justify-center gap-2"
+                            className="w-full py-3 bg-gray-100 dark:bg-surface-dark text-gray-400 font-bold rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-all flex items-center justify-center gap-2"
                         >
                             LOGOUT
                         </button>
@@ -520,7 +521,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                 )}
             </div>
 
-            <h3 className="text-lg font-display font-bold text-gray-800 px-2">
+            <h3 className="text-lg font-display font-bold text-gray-800 dark:text-white px-2">
                 Voting History
                 {verifying && (
                     <span className="ml-2 text-xs font-normal text-gray-400">(syncing...)</span>
@@ -542,7 +543,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                         onClick={() => { setFilter(f.key); setPage(1); }}
                         className={cn(
                             "px-3 py-1 rounded-full text-[10px] font-bold transition-colors whitespace-nowrap",
-                            filter === f.key ? "bg-black text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                            filter === f.key ? "bg-black dark:bg-white text-white dark:text-black" : "bg-gray-100 dark:bg-surface-dark text-gray-400 hover:bg-gray-200 dark:hover:bg-card-dark"
                         )}
                     >
                         {f.label}
@@ -555,9 +556,15 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                 {!isFullyLoaded ? (
                     <VoteHistorySkeleton />
                 ) : paginatedHistory.length === 0 ? (
-                    <p className="text-center py-10 text-gray-400 font-bold">
-                        {history.length === 0 ? "No votes recorded yet." : "No votes match filter."}
-                    </p>
+                    <div className="bg-white/50 dark:bg-card-dark/50 rounded-[2.5rem] border-2 border-dashed border-gray-200 dark:border-gray-700">
+                        <EmptyState
+                            type={history.length === 0 ? "no-votes" : "no-results"}
+                            title={history.length === 0 ? "No Votes Yet" : "No Matches"}
+                            description={history.length === 0
+                                ? "Start making predictions on polls to see your voting history here!"
+                                : "No votes match your current filter. Try a different filter."}
+                        />
+                    </div>
                 ) : null}
 
                 {/* Show actual vote cards only when fully loaded */}
@@ -579,7 +586,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                     });
 
                     return (
-                        <div key={idx} className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col gap-4">
+                        <div key={idx} className="bg-white dark:bg-card-dark p-6 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col gap-4">
 
                             {/* Header: ID + Time */}
                             <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
@@ -589,21 +596,21 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
 
                             <div className="flex justify-between items-start">
                                 <div className="flex-1">
-                                    <h4 className="font-bold text-gray-800 leading-tight mb-2 line-clamp-2">
+                                    <h4 className="font-bold text-gray-800 dark:text-white leading-tight mb-2 line-clamp-2">
                                         {poll.title}
                                     </h4>
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-gray-100 rounded text-[10px] font-black text-gray-500 uppercase">
+                                        <span className="px-2 py-0.5 bg-gray-100 dark:bg-surface-dark rounded text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase">
                                             Your Pick: {poll.options[item.optionIndex]}
                                         </span>
-                                        <span className="px-2 py-0.5 bg-gray-100 rounded text-[10px] font-black text-gray-500 uppercase">
+                                        <span className="px-2 py-0.5 bg-gray-100 dark:bg-surface-dark rounded text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase">
                                             Stake: 1000 USDC
                                         </span>
                                         <span className={cn(
                                             "text-[10px] font-black uppercase px-2 py-0.5 rounded",
-                                            isResolved ? (isWinner ? "bg-green-500 text-white" : "bg-red-100 text-red-600") :
-                                                (isOpen ? "bg-green-100 text-green-600" :
-                                                    (isRevealPhase ? "bg-yellow-100 text-yellow-600" : "bg-gray-200 text-gray-500"))
+                                            isResolved ? (isWinner ? "bg-green-500 text-white" : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400") :
+                                                (isOpen ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400" :
+                                                    (isRevealPhase ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400" : "bg-gray-200 dark:bg-gray-700 text-gray-500"))
                                         )}>
                                             {isResolved ? (isWinner ? "YOU WON!" : "YOU LOST") :
                                                 (isOpen ? "VOTING OPEN" :
@@ -612,7 +619,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                                     </div>
                                     {isResolved && poll.winningOptionIndex !== undefined && (
                                         <div className="mt-2 text-[10px] font-bold text-gray-400">
-                                            Winner: <span className="text-gray-600">{poll.options[poll.winningOptionIndex]}</span>
+                                            Winner: <span className="text-gray-600 dark:text-gray-300">{poll.options[poll.winningOptionIndex]}</span>
                                         </div>
                                     )}
                                 </div>
@@ -635,7 +642,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                                     </button>
                                 )}
                                 {isRevealPhase && item.revealed && (
-                                    <div className="w-full py-3 bg-gray-100 text-gray-400 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2">
+                                    <div className="w-full py-3 bg-gray-100 dark:bg-surface-dark text-gray-400 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2">
                                         <CheckCircle size={14} /> REVEALED
                                     </div>
                                 )}
@@ -677,7 +684,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                                 })()}
 
                                 {isWinner && item.claimed && (
-                                    <button disabled className="w-full py-3 bg-green-100 text-green-600 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2 border border-green-200">
+                                    <button disabled className="w-full py-3 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2 border border-green-200 dark:border-green-800">
                                         <CheckCircle size={14} /> REWARD CLAIMED
                                     </button>
                                 )}
@@ -692,17 +699,17 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                         <button
                             disabled={page === 1}
                             onClick={() => setPage(p => Math.max(1, p - 1))}
-                            className="text-xs font-bold text-gray-400 disabled:opacity-30 hover:text-gray-800"
+                            className="text-xs font-bold text-gray-400 disabled:opacity-30 hover:text-gray-800 dark:hover:text-white"
                         >
                             Previous
                         </button>
-                        <span className="text-xs font-black text-gray-300">
+                        <span className="text-xs font-black text-gray-300 dark:text-gray-600">
                             P. {page} / {totalPages}
                         </span>
                         <button
                             disabled={page === totalPages}
                             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                            className="text-xs font-bold text-gray-400 disabled:opacity-30 hover:text-gray-800"
+                            className="text-xs font-bold text-gray-400 disabled:opacity-30 hover:text-gray-800 dark:hover:text-white"
                         >
                             Next
                         </button>
@@ -725,27 +732,27 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                             initial={{ opacity: 0, scale: 0.95, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl relative z-10"
+                            className="bg-white dark:bg-card-dark rounded-3xl p-6 max-w-sm w-full shadow-2xl relative z-10"
                         >
                             <button
                                 onClick={() => setConfirmResolve(null)}
-                                className="absolute top-4 right-4 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+                                className="absolute top-4 right-4 p-2 bg-gray-100 dark:bg-surface-dark rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                                 aria-label="Close"
                             >
                                 <X size={16} className="text-gray-500" />
                             </button>
 
                             <div className="flex flex-col items-center text-center gap-4">
-                                <div className="p-4 bg-yellow-100 rounded-full">
-                                    <AlertTriangle size={32} className="text-yellow-600" />
+                                <div className="p-4 bg-yellow-100 dark:bg-yellow-900/30 rounded-full">
+                                    <AlertTriangle size={32} className="text-yellow-600 dark:text-yellow-400" />
                                 </div>
 
                                 <div>
-                                    <h3 className="text-xl font-black text-gray-800 mb-2">Resolve Poll?</h3>
-                                    <p className="text-sm text-gray-500 mb-1">
+                                    <h3 className="text-xl font-black text-gray-800 dark:text-white mb-2">Resolve Poll?</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
                                         You are about to finalize results for:
                                     </p>
-                                    <p className="text-sm font-bold text-gray-700 line-clamp-2">
+                                    <p className="text-sm font-bold text-gray-700 dark:text-gray-300 line-clamp-2">
                                         "{confirmResolve.title}"
                                     </p>
                                 </div>
@@ -757,7 +764,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                                 <div className="flex gap-3 w-full mt-2">
                                     <button
                                         onClick={() => setConfirmResolve(null)}
-                                        className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
+                                        className="flex-1 py-3 bg-gray-100 dark:bg-surface-dark text-gray-600 dark:text-gray-300 rounded-xl font-bold text-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
                                     >
                                         CANCEL
                                     </button>
@@ -767,7 +774,7 @@ export function ProfileView({ address, now, onSuccess, onError, onLogout }: Prof
                                             setConfirmResolve(null);
                                             handleResolve(pollId);
                                         }}
-                                        className="flex-1 py-3 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-600 focus:ring-offset-2 flex items-center justify-center gap-2"
+                                        className="flex-1 py-3 bg-gray-900 dark:bg-white text-white dark:text-black rounded-xl font-bold text-sm hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-600 focus:ring-offset-2 flex items-center justify-center gap-2"
                                     >
                                         <Gavel size={14} /> RESOLVE
                                     </button>
